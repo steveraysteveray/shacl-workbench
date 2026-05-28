@@ -6,6 +6,8 @@ import org.example.shaclworkbench.engine.ShaclRunner;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.dnd.*;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
@@ -20,6 +22,7 @@ public class WorkbenchFrame extends JFrame {
     private final JRadioButton validateOnly = new JRadioButton("Validate only");
     private final JButton runButton = new JButton("Run");
     private final ReportPanel reportPanel = new ReportPanel();
+    private final InferredTriplesPanel inferredPanel = new InferredTriplesPanel();
 
     public WorkbenchFrame() {
         super("SHACL Workbench");
@@ -53,19 +56,23 @@ public class WorkbenchFrame extends JFrame {
         gbc.insets = new Insets(2, 4, 2, 4);
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Row 0: workspace folder
+        // Row 0: workspace folder — accepts a dropped folder
         gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("Workspace folder:"), gbc);
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
         workspaceField.setEditable(false);
+        workspaceField.setToolTipText("Drop a folder here, or use Browse");
+        installFieldDrop(workspaceField, true);
         panel.add(workspaceField, gbc);
         gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
         gbc.gridx = 2; panel.add(browseButton("Browse…", true, workspaceField), gbc);
         gbc.gridx = 3; panel.add(clearButton(workspaceField), gbc);
 
-        // Row 1: data file
+        // Row 1: data file — accepts a dropped file
         gbc.gridx = 0; gbc.gridy = 1; panel.add(new JLabel("Data file:"), gbc);
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
         dataFileField.setEditable(false);
+        dataFileField.setToolTipText("Drop a .ttl file here, or use Browse");
+        installFieldDrop(dataFileField, false);
         panel.add(dataFileField, gbc);
         gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
         gbc.gridx = 2; panel.add(browseButton("Browse…", false, dataFileField), gbc);
@@ -91,9 +98,55 @@ public class WorkbenchFrame extends JFrame {
         runButton.setFont(runButton.getFont().deriveFont(Font.BOLD));
         controls.add(runButton);
 
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Validation Report", reportPanel);
+        tabs.addTab("Inferred Triples", inferredPanel);
+        tabs.setPreferredSize(new Dimension(800, 260));
+
         panel.add(controls, BorderLayout.NORTH);
-        panel.add(reportPanel, BorderLayout.CENTER);
+        panel.add(tabs, BorderLayout.CENTER);
         return panel;
+    }
+
+    // ── drag-drop for workspace / data-file fields ────────────────────────────
+
+    /**
+     * Installs a drop target on a read-only text field.
+     * If dirOnly is true, only the first dropped directory is accepted.
+     * If dirOnly is false, only the first dropped file is accepted.
+     */
+    private void installFieldDrop(JTextField field, boolean dirOnly) {
+        new DropTarget(field, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
+            @Override
+            public void dragOver(DropTargetDragEvent e) {
+                if (e.isDataFlavorSupported(DataFlavor.javaFileListFlavor))
+                    e.acceptDrag(DnDConstants.ACTION_COPY);
+                else
+                    e.rejectDrag();
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public void drop(DropTargetDropEvent e) {
+                try {
+                    e.acceptDrop(DnDConstants.ACTION_COPY);
+                    List<File> files = (List<File>) e.getTransferable()
+                            .getTransferData(DataFlavor.javaFileListFlavor);
+                    for (File f : files) {
+                        if (dirOnly && f.isDirectory()) {
+                            field.setText(f.getAbsolutePath());
+                            break;
+                        } else if (!dirOnly && f.isFile()) {
+                            field.setText(f.getAbsolutePath());
+                            break;
+                        }
+                    }
+                    e.dropComplete(true);
+                } catch (Exception ex) {
+                    e.dropComplete(false);
+                }
+            }
+        });
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -140,6 +193,7 @@ public class WorkbenchFrame extends JFrame {
 
         runButton.setEnabled(false);
         reportPanel.clear();
+        inferredPanel.clear();
 
         SwingWorker<ShaclResult, Void> worker = new SwingWorker<>() {
             @Override
@@ -153,6 +207,7 @@ public class WorkbenchFrame extends JFrame {
                 try {
                     ShaclResult result = get();
                     reportPanel.showResult(result.report(), result.reportTurtle(), result.inferredTripleCount());
+                    inferredPanel.showInferred(result.inferredTripleCount(), result.inferredTurtle());
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     JOptionPane.showMessageDialog(WorkbenchFrame.this,

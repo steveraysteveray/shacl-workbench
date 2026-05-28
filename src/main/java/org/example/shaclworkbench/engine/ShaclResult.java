@@ -7,10 +7,12 @@ import org.apache.jena.shacl.ValidationReport;
  * @param report              Jena ValidationReport for programmatic access
  * @param reportTurtle        serialized Turtle of the sh:ValidationReport graph
  * @param inferredTripleCount triples added during the inference pass (0 if inference skipped)
+ * @param inferredTurtle      serialized Turtle of only the inferred triples (empty if none)
  */
 public record ShaclResult(
         boolean conforms,
         ValidationReport report,
         String reportTurtle,
-        int inferredTripleCount
+        int inferredTripleCount,
+        String inferredTurtle
 ) {}
