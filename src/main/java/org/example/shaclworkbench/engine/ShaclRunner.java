@@ -1,12 +1,11 @@
 package org.example.shaclworkbench.engine;
 
-import org.apache.jena.graph.Graph;
-import org.apache.jena.graph.GraphUtil;
 import org.apache.jena.graph.Triple;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFDataMgr;
+import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.shacl.Shapes;
 import org.apache.jena.shacl.ShaclValidator;
 import org.apache.jena.shacl.ValidationReport;
@@ -73,11 +72,18 @@ public class ShaclRunner {
         ValidationReport report = ShaclValidator.get().validate(
                 validationShapes, dataModel.getGraph());
 
-        // ── 4. Serialize the report ───────────────────────────────────────────
+        // ── 4. Merge prefix declarations from every loaded file ───────────────
+        // Used by the UI to display prefixed URIs (e.g. ex:Alice) in the report.
+        PrefixMapping prefixes = PrefixMapping.Factory.create();
+        prefixes.setNsPrefixes(dataModel);
+        prefixes.setNsPrefixes(validationShapesModel);
+
+        // ── 5. Serialize the report ───────────────────────────────────────────
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         RDFDataMgr.write(baos, report.getModel(), Lang.TURTLE);
 
-        return new ShaclResult(report.conforms(), report, baos.toString(), inferredCount, inferredTurtle);
+        return new ShaclResult(report.conforms(), report, baos.toString(),
+                inferredCount, inferredTurtle, prefixes);
     }
 
     private static Model loadMerged(List<Path> paths) {

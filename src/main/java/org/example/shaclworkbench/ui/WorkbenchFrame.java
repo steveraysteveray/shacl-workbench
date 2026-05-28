@@ -206,7 +206,8 @@ public class WorkbenchFrame extends JFrame {
                 runButton.setEnabled(true);
                 try {
                     ShaclResult result = get();
-                    reportPanel.showResult(result.report(), result.reportTurtle(), result.inferredTripleCount());
+                    reportPanel.showResult(result.report(), result.reportTurtle(),
+                            result.inferredTripleCount(), result.prefixMap());
                     inferredPanel.showInferred(result.inferredTripleCount(), result.inferredTurtle());
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
