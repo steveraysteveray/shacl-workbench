@@ -1,0 +1,14 @@
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix ex:   <http://example.org/> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+# sh:TripleRule: every ex:Person is also an ex:LivingThing
+ex:PersonLivingThingRule
+    a sh:NodeShape ;
+    sh:targetClass ex:Person ;
+    sh:rule [
+        a sh:TripleRule ;
+        sh:subject   sh:this ;
+        sh:predicate rdf:type ;
+        sh:object    ex:LivingThing ;
+    ] .

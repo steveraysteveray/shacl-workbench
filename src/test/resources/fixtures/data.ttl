@@ -1,0 +1,9 @@
+@prefix ex:  <http://example.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Alice has no ex:name — should produce a sh:Violation
+ex:Alice a ex:Person .
+
+# Bob is valid
+ex:Bob   a ex:Person ;
+         ex:name "Bob"^^xsd:string .
