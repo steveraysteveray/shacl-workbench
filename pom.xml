@@ -78,6 +78,11 @@
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
+                                        <!-- Exclude module descriptors: Jena 5.x is modular
+                                             and multiple module-info.class files cannot be
+                                             merged into a single unnamed-module fat JAR. -->
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>**/module-info.class</exclude>
                                     </excludes>
                                 </filter>
                             </filters>

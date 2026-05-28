@@ -122,7 +122,10 @@ public class ShaclAFEngine {
         for (Node focus : focusNodes) {
             QuerySolutionMap binding = new QuerySolutionMap();
             binding.add("this", dataModel.asRDFNode(focus));
-            try (QueryExecution qe = QueryExecutionFactory.create(query, dataModel, binding)) {
+            try (QueryExecution qe = QueryExecution.model(dataModel)
+                    .query(query)
+                    .substitution(binding)
+                    .build()) {
                 qe.execConstruct().listStatements().forEachRemaining(stmt -> {
                     if (!dataModel.contains(stmt)) dataModel.add(stmt);
                 });
