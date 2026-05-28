@@ -18,7 +18,8 @@ public record ShaclConfig(
         boolean runInference
 ) {
     public ShaclConfig {
-        if (dataFile == null) throw new IllegalArgumentException("dataFile is required");
+        if (workspaceDir == null && dataFile == null)
+            throw new IllegalArgumentException("at least one of workspaceDir or dataFile is required");
         if (validationShapeFiles == null || validationShapeFiles.isEmpty())
             throw new IllegalArgumentException("at least one validation shapes file is required");
         inferenceShapeFiles = inferenceShapeFiles == null ? List.of() : List.copyOf(inferenceShapeFiles);

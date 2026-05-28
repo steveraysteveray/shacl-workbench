@@ -172,20 +172,22 @@ public class WorkbenchFrame extends JFrame {
     // ── pipeline ─────────────────────────────────────────────────────────────
 
     private void runPipeline() {
+        String wsText = workspaceField.getText().trim();
         String dataFileText = dataFileField.getText().trim();
-        if (dataFileText.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please select a data file.", "Missing input", JOptionPane.WARNING_MESSAGE);
+        if (wsText.isEmpty() && dataFileText.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please specify a workspace folder, a data file, or both.",
+                    "Missing input", JOptionPane.WARNING_MESSAGE);
             return;
         }
         List<Path> validationPaths = validationZone.getPaths();
         if (validationPaths.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please add at least one validation shapes file.", "Missing input", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Please add at least one validation shapes file.",
+                    "Missing input", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        String wsText = workspaceField.getText().trim();
         Path workspaceDir = wsText.isEmpty() ? null : Path.of(wsText);
-        Path dataFile = Path.of(dataFileText);
+        Path dataFile = dataFileText.isEmpty() ? null : Path.of(dataFileText);
         boolean doInfer = inferAndValidate.isSelected();
         List<Path> inferPaths = doInfer ? inferenceZone.getPaths() : List.of();
 

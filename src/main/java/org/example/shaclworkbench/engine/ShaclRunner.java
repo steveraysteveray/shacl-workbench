@@ -32,7 +32,9 @@ public class ShaclRunner {
                       .forEach(p -> RDFDataMgr.read(dataModel, p.toUri().toString()));
             }
         }
-        RDFDataMgr.read(dataModel, config.dataFile().toUri().toString());
+        if (config.dataFile() != null) {
+            RDFDataMgr.read(dataModel, config.dataFile().toUri().toString());
+        }
 
         // ── 2. Inference pass (SHACL-AF: sh:TripleRule and sh:SPARQLRule) ─────
         int inferredCount = 0;
