@@ -14,6 +14,7 @@ class ShaclRunnerTest {
     void validationDetectsViolation() throws Exception {
         ShaclConfig config = new ShaclConfig(
                 null,
+                List.of(),
                 fixture("data.ttl"),
                 List.of(),
                 List.of(fixture("shapes.ttl")),
@@ -31,6 +32,7 @@ class ShaclRunnerTest {
     void inferenceAddsTriples() throws Exception {
         ShaclConfig config = new ShaclConfig(
                 null,
+                List.of(),
                 fixture("data.ttl"),
                 List.of(fixture("inference-shapes.ttl")),
                 List.of(fixture("shapes.ttl")),

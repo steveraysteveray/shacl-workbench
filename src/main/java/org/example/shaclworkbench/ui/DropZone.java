@@ -12,16 +12,25 @@ import java.util.List;
 
 /**
  * A list panel that accepts drag-and-drop of files and folders.
- * Folders are expanded to their immediate *.ttl children (non-recursive).
- * Individual files are added as-is regardless of extension.
+ *
+ * When {@code expandFolders} is true (default), dropped folders are expanded to their
+ * immediate *.ttl children (non-recursive). When false, folders are added as-is — useful
+ * for the workspace exclusions list where the intent is to exclude an entire sub-tree.
  */
 public class DropZone extends JPanel {
 
     private final DefaultListModel<Path> model = new DefaultListModel<>();
     private final JList<Path> list;
+    private final boolean expandFolders;
 
+    /** Convenience constructor — folders are expanded to immediate *.ttl children. */
     public DropZone(String title) {
+        this(title, true);
+    }
+
+    public DropZone(String title, boolean expandFolders) {
         super(new BorderLayout(4, 4));
+        this.expandFolders = expandFolders;
         setBorder(BorderFactory.createTitledBorder(title));
 
         list = new JList<>(model);
@@ -32,9 +41,9 @@ public class DropZone extends JPanel {
         scroll.setPreferredSize(new Dimension(320, 160));
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        JButton addFile = new JButton("Add file…");
+        JButton addFile   = new JButton("Add file…");
         JButton addFolder = new JButton("Add folder…");
-        JButton remove = new JButton("Remove");
+        JButton remove    = new JButton("Remove");
 
         addFile.addActionListener(e -> chooseFile());
         addFolder.addActionListener(e -> chooseFolder());
@@ -58,6 +67,11 @@ public class DropZone extends JPanel {
 
     public void clear() {
         model.clear();
+    }
+
+    /** Adds a path directly without folder-expansion (used for session restore). */
+    public void addPathDirect(Path p) {
+        addIfAbsent(p);
     }
 
     // ── private ──────────────────────────────────────────────────────────────
@@ -85,7 +99,7 @@ public class DropZone extends JPanel {
     }
 
     private void addPath(Path p) {
-        if (Files.isDirectory(p)) {
+        if (expandFolders && Files.isDirectory(p)) {
             try (var stream = Files.list(p)) {
                 stream.filter(f -> f.toString().endsWith(".ttl"))
                       .sorted()

@@ -26,9 +26,10 @@ public class ShaclRunner {
         // the data file is the focus of validation.
         Model dataModel = ModelFactory.createDefaultModel();
 
-        if (config.workspaceDir() != null) {
-            try (var stream = Files.walk(config.workspaceDir())) {
+        if (config.rootDir() != null) {
+            try (var stream = Files.walk(config.rootDir())) {
                 stream.filter(p -> p.toString().endsWith(".ttl"))
+                      .filter(p -> config.excludedPaths().stream().noneMatch(p::startsWith))
                       .forEach(p -> RDFDataMgr.read(dataModel, p.toUri().toString()));
             }
         }

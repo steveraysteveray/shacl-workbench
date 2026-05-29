@@ -3,6 +3,8 @@ package org.example.shaclworkbench.ui;
 import org.example.shaclworkbench.engine.ShaclConfig;
 import org.example.shaclworkbench.engine.ShaclResult;
 import org.example.shaclworkbench.engine.ShaclRunner;
+import org.example.shaclworkbench.session.SessionManager;
+import org.example.shaclworkbench.session.SessionState;
 
 import javax.swing.*;
 import java.awt.*;
@@ -14,14 +16,15 @@ import java.util.List;
 
 public class WorkbenchFrame extends JFrame {
 
-    private final JTextField workspaceField = new JTextField(40);
-    private final JTextField dataFileField = new JTextField(40);
-    private final DropZone inferenceZone = new DropZone("Inference shapes (sh:TripleRule / sh:SPARQLRule)");
+    private final JTextField rootFolderField = new JTextField(40);
+    private final JTextField dataFileField   = new JTextField(40);
+    private final DropZone exclusionZone  = new DropZone("Workspace exclusions", false);
+    private final DropZone inferenceZone  = new DropZone("Inference shapes (sh:TripleRule / sh:SPARQLRule)");
     private final DropZone validationZone = new DropZone("Validation shapes");
     private final JRadioButton inferAndValidate = new JRadioButton("Infer + Validate", true);
-    private final JRadioButton validateOnly = new JRadioButton("Validate only");
+    private final JRadioButton validateOnly     = new JRadioButton("Validate only");
     private final JButton runButton = new JButton("Run");
-    private final ReportPanel reportPanel = new ReportPanel();
+    private final ReportPanel reportPanel       = new ReportPanel();
     private final InferredTriplesPanel inferredPanel = new InferredTriplesPanel();
 
     public WorkbenchFrame() {
@@ -30,7 +33,7 @@ public class WorkbenchFrame extends JFrame {
         setLayout(new BorderLayout(8, 8));
         getRootPane().setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
-        add(buildTopPanel(), BorderLayout.NORTH);
+        add(buildTopPanel(),    BorderLayout.NORTH);
         add(buildCenterPanel(), BorderLayout.CENTER);
         add(buildBottomPanel(), BorderLayout.SOUTH);
 
@@ -41,6 +44,8 @@ public class WorkbenchFrame extends JFrame {
         validateOnly.addActionListener(e -> inferenceZone.setEnabled(false));
 
         runButton.addActionListener(e -> runPipeline());
+
+        restoreSession();
 
         pack();
         setLocationRelativeTo(null);
@@ -56,22 +61,22 @@ public class WorkbenchFrame extends JFrame {
         gbc.insets = new Insets(2, 4, 2, 4);
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Row 0: workspace folder — accepts a dropped folder
-        gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("Workspace folder:"), gbc);
+        // Row 0: root folder — accepts a dropped folder
+        gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("Root folder:"), gbc);
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
-        workspaceField.setEditable(false);
-        workspaceField.setToolTipText("Drop a folder here, or use Browse");
-        installFieldDrop(workspaceField, true);
-        panel.add(workspaceField, gbc);
+        rootFolderField.setEditable(false);
+        rootFolderField.setToolTipText("Drop a folder here, or use Browse. All .ttl files are loaded recursively.");
+        installFieldDrop(rootFolderField, true);
+        panel.add(rootFolderField, gbc);
         gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
-        gbc.gridx = 2; panel.add(browseButton("Browse…", true, workspaceField), gbc);
-        gbc.gridx = 3; panel.add(clearButton(workspaceField), gbc);
+        gbc.gridx = 2; panel.add(browseButton("Browse…", true, rootFolderField), gbc);
+        gbc.gridx = 3; panel.add(clearButton(rootFolderField), gbc);
 
         // Row 1: data file — accepts a dropped file
         gbc.gridx = 0; gbc.gridy = 1; panel.add(new JLabel("Data file:"), gbc);
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
         dataFileField.setEditable(false);
-        dataFileField.setToolTipText("Drop a .ttl file here, or use Browse");
+        dataFileField.setToolTipText("Drop a .ttl file here, or use Browse. Optional if a root folder is set.");
         installFieldDrop(dataFileField, false);
         panel.add(dataFileField, gbc);
         gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
@@ -82,7 +87,8 @@ public class WorkbenchFrame extends JFrame {
     }
 
     private JPanel buildCenterPanel() {
-        JPanel panel = new JPanel(new GridLayout(1, 2, 8, 0));
+        JPanel panel = new JPanel(new GridLayout(1, 3, 8, 0));
+        panel.add(exclusionZone);
         panel.add(inferenceZone);
         panel.add(validationZone);
         return panel;
@@ -108,12 +114,12 @@ public class WorkbenchFrame extends JFrame {
         return panel;
     }
 
-    // ── drag-drop for workspace / data-file fields ────────────────────────────
+    // ── drag-drop for root-folder / data-file fields ─────────────────────────
 
     /**
      * Installs a drop target on a read-only text field.
-     * If dirOnly is true, only the first dropped directory is accepted.
-     * If dirOnly is false, only the first dropped file is accepted.
+     * dirOnly=true: only the first dropped directory is accepted.
+     * dirOnly=false: only the first dropped file is accepted.
      */
     private void installFieldDrop(JTextField field, boolean dirOnly) {
         new DropTarget(field, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
@@ -169,13 +175,44 @@ public class WorkbenchFrame extends JFrame {
         return btn;
     }
 
+    // ── session ───────────────────────────────────────────────────────────────
+
+    private void restoreSession() {
+        SessionManager.load().ifPresent(s -> {
+            rootFolderField.setText(s.rootFolder());
+            dataFileField.setText(s.dataFile());
+            s.exclusions().stream().map(Path::of).forEach(exclusionZone::addPathDirect);
+            s.inferenceShapes().stream().map(Path::of).forEach(inferenceZone::addPathDirect);
+            s.validationShapes().stream().map(Path::of).forEach(validationZone::addPathDirect);
+            if (s.inferAndValidate()) {
+                inferAndValidate.setSelected(true);
+                inferenceZone.setEnabled(true);
+            } else {
+                validateOnly.setSelected(true);
+                inferenceZone.setEnabled(false);
+            }
+        });
+    }
+
+    private void saveSession() {
+        SessionManager.save(new SessionState(
+                rootFolderField.getText().trim(),
+                exclusionZone.getPaths().stream().map(Path::toString).toList(),
+                dataFileField.getText().trim(),
+                inferenceZone.getPaths().stream().map(Path::toString).toList(),
+                validationZone.getPaths().stream().map(Path::toString).toList(),
+                inferAndValidate.isSelected()
+        ));
+    }
+
     // ── pipeline ─────────────────────────────────────────────────────────────
 
     private void runPipeline() {
-        String wsText = workspaceField.getText().trim();
+        String rootText     = rootFolderField.getText().trim();
         String dataFileText = dataFileField.getText().trim();
-        if (wsText.isEmpty() && dataFileText.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please specify a workspace folder, a data file, or both.",
+        if (rootText.isEmpty() && dataFileText.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Please specify a root folder, a data file, or both.",
                     "Missing input", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -186,12 +223,14 @@ public class WorkbenchFrame extends JFrame {
             return;
         }
 
-        Path workspaceDir = wsText.isEmpty() ? null : Path.of(wsText);
+        Path rootDir  = rootText.isEmpty()     ? null : Path.of(rootText);
         Path dataFile = dataFileText.isEmpty() ? null : Path.of(dataFileText);
+        List<Path> excludedPaths = exclusionZone.getPaths();
         boolean doInfer = inferAndValidate.isSelected();
         List<Path> inferPaths = doInfer ? inferenceZone.getPaths() : List.of();
 
-        ShaclConfig config = new ShaclConfig(workspaceDir, dataFile, inferPaths, validationPaths, doInfer);
+        ShaclConfig config = new ShaclConfig(
+                rootDir, excludedPaths, dataFile, inferPaths, validationPaths, doInfer);
 
         runButton.setEnabled(false);
         reportPanel.clear();
@@ -211,6 +250,7 @@ public class WorkbenchFrame extends JFrame {
                     reportPanel.showResult(result.report(), result.reportTurtle(),
                             result.inferredTripleCount(), result.prefixMap());
                     inferredPanel.showInferred(result.inferredTripleCount(), result.inferredTurtle());
+                    saveSession();
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     JOptionPane.showMessageDialog(WorkbenchFrame.this,
