@@ -162,6 +162,7 @@ public class ReportPanel extends JPanel {
 
             tc.setPreferredWidth(width);
         }
+        table.doLayout();   // stamp preferred widths into actual widths while in OFF mode
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
     }
 
