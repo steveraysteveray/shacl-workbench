@@ -7,8 +7,10 @@ import org.apache.jena.shacl.validation.ReportEntry;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
+import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -17,17 +19,26 @@ import java.util.List;
 
 public class ReportPanel extends JPanel {
 
-    private final JLabel statusLabel = new JLabel("No results yet.");
+    private final JLabel statusLabel   = new JLabel("No results yet.");
     private final JLabel inferredLabel = new JLabel();
-    private final JCheckBox showFullUri = new JCheckBox("Full URI");
+    private final JCheckBox showFullUri     = new JCheckBox("Full URI");
+    private final JCheckBox filterViolation = new JCheckBox("Violation", true);
+    private final JCheckBox filterWarning   = new JCheckBox("Warning",   true);
+    private final JCheckBox filterInfo      = new JCheckBox("Info",      true);
+
     private final ReportTableModel tableModel = new ReportTableModel();
+    private final JTable table = new JTable(tableModel);
+    private final TableRowSorter<ReportTableModel> sorter = new TableRowSorter<>(tableModel);
+
     private String currentReportTurtle = "";
+    private boolean lastConforms = true;
+    private int totalResultCount = 0;
 
     public ReportPanel() {
         super(new BorderLayout(4, 4));
         setBorder(BorderFactory.createTitledBorder("Validation report"));
 
-        JTable table = new JTable(tableModel);
+        table.setRowSorter(sorter);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getColumnModel().getColumn(0).setPreferredWidth(200);
@@ -35,15 +46,20 @@ public class ReportPanel extends JPanel {
         table.getColumnModel().getColumn(2).setPreferredWidth(140);
         table.getColumnModel().getColumn(3).setPreferredWidth(70);
         table.getColumnModel().getColumn(4).setPreferredWidth(260);
-
-        // Show full cell content in tooltip so long URIs are always readable
         table.setDefaultRenderer(Object.class, new TooltipRenderer());
 
         JScrollPane scroll = new JScrollPane(table);
         scroll.setPreferredSize(new Dimension(800, 200));
 
-        // Toggle: refresh table when user switches between local name and full URI
         showFullUri.addActionListener(e -> tableModel.setFullUri(showFullUri.isSelected()));
+
+        ActionListener filterListener = e -> {
+            applyFilter();
+            updateStatusLabel();
+        };
+        filterViolation.addActionListener(filterListener);
+        filterWarning.addActionListener(filterListener);
+        filterInfo.addActionListener(filterListener);
 
         JPanel topBar = new JPanel(new BorderLayout());
 
@@ -51,11 +67,16 @@ public class ReportPanel extends JPanel {
         statusRow.add(statusLabel);
         statusRow.add(inferredLabel);
         statusRow.add(showFullUri);
+        statusRow.add(new JSeparator(SwingConstants.VERTICAL));
+        statusRow.add(new JLabel("Show:"));
+        statusRow.add(filterViolation);
+        statusRow.add(filterWarning);
+        statusRow.add(filterInfo);
         topBar.add(statusRow, BorderLayout.WEST);
 
         JPanel buttonRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         JButton copyTurtle = new JButton("Copy Turtle");
-        JButton saveAs = new JButton("Save report…");
+        JButton saveAs     = new JButton("Save report…");
         copyTurtle.addActionListener(e -> copyTurtle());
         saveAs.addActionListener(e -> saveReport());
         buttonRow.add(copyTurtle);
@@ -69,19 +90,19 @@ public class ReportPanel extends JPanel {
     public void showResult(ValidationReport report, String turtle, int inferredCount,
                            PrefixMapping prefixMap) {
         currentReportTurtle = turtle;
+        lastConforms = report.conforms();
+        totalResultCount = report.getEntries().size();
         tableModel.setPrefixMap(prefixMap);
         tableModel.setEntries(new ArrayList<>(report.getEntries()));
-
-        boolean conforms = report.conforms();
-        statusLabel.setText(conforms
-                ? "✓  Conforms"
-                : "✗  Does not conform  (" + tableModel.getRowCount() + " result(s))");
-        statusLabel.setForeground(conforms ? new Color(0, 128, 0) : Color.RED);
+        applyFilter();
+        updateStatusLabel();
         inferredLabel.setText(inferredCount > 0 ? "[" + inferredCount + " triple(s) inferred]" : "");
     }
 
     public void clear() {
         tableModel.setEntries(List.of());
+        lastConforms = true;
+        totalResultCount = 0;
         statusLabel.setText("No results yet.");
         statusLabel.setForeground(UIManager.getColor("Label.foreground"));
         inferredLabel.setText("");
@@ -89,6 +110,42 @@ public class ReportPanel extends JPanel {
     }
 
     // ── private ──────────────────────────────────────────────────────────────
+
+    /**
+     * Rebuilds the row filter from the three severity checkboxes.
+     * RowFilter.regexFilter returns RowFilter&lt;Object,Object&gt; which satisfies
+     * setRowFilter's bound of RowFilter&lt;? super M, ? super I&gt;, neatly avoiding
+     * the generic-erasure clash that arises when overriding include() directly.
+     */
+    private void applyFilter() {
+        List<String> enabled = new ArrayList<>(3);
+        if (filterViolation.isSelected()) enabled.add("Violation");
+        if (filterWarning.isSelected())   enabled.add("Warning");
+        if (filterInfo.isSelected())      enabled.add("Info");
+
+        if (enabled.size() == 3) {
+            sorter.setRowFilter(null);                          // all visible — no filter needed
+        } else if (enabled.isEmpty()) {
+            sorter.setRowFilter(RowFilter.regexFilter("(?!x)x", 3)); // matches nothing
+        } else {
+            sorter.setRowFilter(RowFilter.regexFilter(
+                    "^(" + String.join("|", enabled) + ")$", 3));
+        }
+    }
+
+    private void updateStatusLabel() {
+        if (lastConforms) {
+            statusLabel.setText("✓  Conforms");
+            statusLabel.setForeground(new Color(0, 128, 0));
+        } else {
+            int visible = table.getRowCount();   // post-filter count
+            String count = (visible == totalResultCount)
+                    ? totalResultCount + " result(s)"
+                    : visible + " of " + totalResultCount + " result(s)";
+            statusLabel.setText("✗  Does not conform  (" + count + ")");
+            statusLabel.setForeground(Color.RED);
+        }
+    }
 
     private void copyTurtle() {
         Toolkit.getDefaultToolkit().getSystemClipboard()
@@ -150,12 +207,6 @@ public class ReportPanel extends JPanel {
             };
         }
 
-        /**
-         * Strips angle brackets from Jena's Node.toString() output, then:
-         * - fullUri mode: returns the bare URI
-         * - default: tries to shorten using the loaded prefix map; falls back to full URI
-         *   if no matching prefix is declared (avoids silent loss of namespace info).
-         */
         private String format(String raw) {
             String uri = raw.startsWith("<") && raw.endsWith(">")
                     ? raw.substring(1, raw.length() - 1) : raw;
@@ -170,7 +221,6 @@ public class ReportPanel extends JPanel {
 
     // ── tooltip renderer ─────────────────────────────────────────────────────
 
-    /** Shows the full cell value as a tooltip so truncated URIs are always readable. */
     private static class TooltipRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(

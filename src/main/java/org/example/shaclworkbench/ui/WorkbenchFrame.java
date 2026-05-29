@@ -33,9 +33,13 @@ public class WorkbenchFrame extends JFrame {
         setLayout(new BorderLayout(8, 8));
         getRootPane().setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
-        add(buildTopPanel(),    BorderLayout.NORTH);
-        add(buildCenterPanel(), BorderLayout.CENTER);
-        add(buildBottomPanel(), BorderLayout.SOUTH);
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                buildCenterPanel(), buildBottomPanel());
+        split.setResizeWeight(0.0);   // extra height on resize goes to the bottom (report) pane
+        split.setBorder(null);
+
+        add(buildTopPanel(), BorderLayout.NORTH);
+        add(split,           BorderLayout.CENTER);
 
         ButtonGroup group = new ButtonGroup();
         group.add(inferAndValidate);
