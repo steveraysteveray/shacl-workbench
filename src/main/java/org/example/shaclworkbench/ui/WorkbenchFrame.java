@@ -10,6 +10,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.dnd.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
@@ -24,12 +26,20 @@ public class WorkbenchFrame extends JFrame {
     private final JRadioButton inferAndValidate = new JRadioButton("Infer + Validate", true);
     private final JRadioButton validateOnly     = new JRadioButton("Validate only");
     private final JButton runButton = new JButton("Run");
+    private final JLabel sessionLabel = new JLabel("");
     private final ReportPanel reportPanel       = new ReportPanel();
     private final InferredTriplesPanel inferredPanel = new InferredTriplesPanel();
 
     public WorkbenchFrame() {
         super("SHACL Workbench");
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent e) {
+                saveSession();
+                dispose();
+                System.exit(0);
+            }
+        });
         setLayout(new BorderLayout(8, 8));
         getRootPane().setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
@@ -107,6 +117,9 @@ public class WorkbenchFrame extends JFrame {
         controls.add(Box.createHorizontalStrut(16));
         runButton.setFont(runButton.getFont().deriveFont(Font.BOLD));
         controls.add(runButton);
+        sessionLabel.setFont(sessionLabel.getFont().deriveFont(Font.ITALIC));
+        sessionLabel.setForeground(Color.GRAY);
+        controls.add(sessionLabel);
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("Validation Report", reportPanel);
@@ -182,7 +195,8 @@ public class WorkbenchFrame extends JFrame {
     // ── session ───────────────────────────────────────────────────────────────
 
     private void restoreSession() {
-        SessionManager.load().ifPresent(s -> {
+        var loaded = SessionManager.load();
+        loaded.ifPresent(s -> {
             rootFolderField.setText(s.rootFolder());
             dataFileField.setText(s.dataFile());
             s.exclusions().stream().map(Path::of).forEach(exclusionZone::addPathDirect);
@@ -196,6 +210,7 @@ public class WorkbenchFrame extends JFrame {
                 inferenceZone.setEnabled(false);
             }
         });
+        sessionLabel.setText(loaded.isPresent() ? "Session restored" : "No saved session");
     }
 
     private void saveSession() {
@@ -207,6 +222,7 @@ public class WorkbenchFrame extends JFrame {
                 validationZone.getPaths().stream().map(Path::toString).toList(),
                 inferAndValidate.isSelected()
         ));
+        sessionLabel.setText("Session saved");
     }
 
     // ── pipeline ─────────────────────────────────────────────────────────────
