@@ -135,8 +135,14 @@ public class ReportPanel extends JPanel {
         }
     }
 
-    /** Sets each column's preferred width to fit its widest rendered cell (header or data). */
+    /**
+     * Sets each column's preferred width to fit its widest rendered cell (header or data).
+     * AUTO_RESIZE_OFF is set during the loop because each setPreferredWidth call under
+     * AUTO_RESIZE_LAST_COLUMN triggers a compensating layout pass that corrupts widths
+     * set in earlier iterations.
+     */
     private void packColumns() {
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         for (int col = 0; col < table.getColumnCount(); col++) {
             TableColumn tc = table.getColumnModel().getColumn(col);
 
@@ -156,6 +162,7 @@ public class ReportPanel extends JPanel {
 
             tc.setPreferredWidth(width);
         }
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
     }
 
     private void updateStatusLabel() {
