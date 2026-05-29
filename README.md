@@ -2,6 +2,12 @@
 
 A desktop application for running SHACL inferencing and validation against RDF/Turtle files, built on [Apache Jena](https://jena.apache.org/) 5.x.
 
+## Download
+
+The easiest way to use SHACL Workbench is to download the macOS installer from the [Releases](https://github.com/steveraysteveray/shacl-workbench/releases) page. The `.dmg` bundles its own Java runtime — no JDK or Maven installation required.
+
+> **First launch:** macOS may show a security prompt because the app is not signed. Right-click the app in Finder and choose **Open**, then confirm. You only need to do this once.
+
 ## Features
 
 - **SHACL-AF inference** — applies `sh:TripleRule` and `sh:SPARQLRule` rules to a fixed point before validating
@@ -30,13 +36,24 @@ mvn -version
 
 ## Build
 
+### Fat JAR (for development / command-line use)
+
 ```
 git clone https://github.com/steveraysteveray/shacl-workbench.git
 cd shacl-workbench
 mvn clean package -DskipTests
+java -jar target/shacl-workbench-1.0-SNAPSHOT.jar &
 ```
 
-The self-contained JAR is written to `target/shacl-workbench-1.0-SNAPSHOT.jar` (~15 MB).
+### macOS .dmg installer
+
+Requires JDK 21+ and Maven. Produces a self-contained `.dmg` in `dist/` that bundles its own Java runtime.
+
+```
+./package-mac.sh
+```
+
+To add a custom Dock icon, place a `icon.icns` file at `src/main/resources/icon.icns` before running the script. See Apple's [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/app-icons) for icon dimensions.
 
 ## Run
 
