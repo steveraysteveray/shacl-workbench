@@ -7,6 +7,7 @@ import org.apache.jena.shacl.validation.ReportEntry;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableColumn;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
@@ -95,6 +96,7 @@ public class ReportPanel extends JPanel {
         tableModel.setPrefixMap(prefixMap);
         tableModel.setEntries(new ArrayList<>(report.getEntries()));
         applyFilter();
+        packColumns();
         updateStatusLabel();
         inferredLabel.setText(inferredCount > 0 ? "[" + inferredCount + " triple(s) inferred]" : "");
     }
@@ -130,6 +132,29 @@ public class ReportPanel extends JPanel {
         } else {
             sorter.setRowFilter(RowFilter.regexFilter(
                     "^(" + String.join("|", enabled) + ")$", 3));
+        }
+    }
+
+    /** Sets each column's preferred width to fit its widest rendered cell (header or data). */
+    private void packColumns() {
+        for (int col = 0; col < table.getColumnCount(); col++) {
+            TableColumn tc = table.getColumnModel().getColumn(col);
+
+            // Header
+            var hr = tc.getHeaderRenderer();
+            if (hr == null) hr = table.getTableHeader().getDefaultRenderer();
+            int width = hr.getTableCellRendererComponent(
+                    table, tc.getHeaderValue(), false, false, -1, col)
+                    .getPreferredSize().width + 8;
+
+            // Data rows (post-filter view indices)
+            for (int row = 0; row < table.getRowCount(); row++) {
+                int w = table.prepareRenderer(table.getCellRenderer(row, col), row, col)
+                             .getPreferredSize().width + 8;
+                if (w > width) width = w;
+            }
+
+            tc.setPreferredWidth(width);
         }
     }
 
