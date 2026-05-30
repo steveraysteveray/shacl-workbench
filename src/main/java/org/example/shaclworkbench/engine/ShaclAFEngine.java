@@ -11,6 +11,7 @@ import org.apache.jena.shacl.parser.Shape;
 import org.apache.jena.shacl.vocabulary.SHACL;
 import org.apache.jena.vocabulary.RDF;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,6 +21,7 @@ import java.util.Set;
  *
  * Iterates rule application to a fixed point (no new triples are added).
  * A safety limit of 100 passes guards against infinite loops in cyclic rules.
+ * Each added triple is returned with attribution to the shape and rule that produced it.
  */
 public class ShaclAFEngine {
 
@@ -43,22 +45,22 @@ public class ShaclAFEngine {
     /**
      * Applies all rules until no new triples are produced.
      *
-     * @return total number of triples added to the data graph
+     * @return every triple added to the data graph, attributed to the rule that added it
      */
-    public int execute() {
-        int total = 0;
+    public List<InferredTriple> execute() {
+        List<InferredTriple> all = new ArrayList<>();
         for (int pass = 0; pass < MAX_PASSES; pass++) {
-            int added = onePass();
-            total += added;
-            if (added == 0) break;
+            List<InferredTriple> added = onePass();
+            all.addAll(added);
+            if (added.isEmpty()) break;
         }
-        return total;
+        return all;
     }
 
     // ── private ──────────────────────────────────────────────────────────────
 
-    private int onePass() {
-        int before = dataGraph.size();
+    private List<InferredTriple> onePass() {
+        List<InferredTriple> added = new ArrayList<>();
 
         for (Shape shape : shapes.getTargetShapes()) {
             if (shape.deactivated()) continue;
@@ -77,17 +79,18 @@ public class ShaclAFEngine {
 
             for (Node rule : rules) {
                 if (isType(rule, SHACL.TripleRule)) {
-                    applyTripleRule(focusNodes, rule);
+                    applyTripleRule(focusNodes, rule, shape.getShapeNode(), added);
                 } else if (isType(rule, SHACL.SPARQLRule)) {
-                    applySPARQLRule(focusNodes, rule);
+                    applySPARQLRule(focusNodes, rule, shape.getShapeNode(), added);
                 }
             }
         }
 
-        return dataGraph.size() - before;
+        return added;
     }
 
-    private void applyTripleRule(Set<Node> focusNodes, Node rule) {
+    private void applyTripleRule(Set<Node> focusNodes, Node rule, Node shapeNode,
+                                  List<InferredTriple> out) {
         Node subjExpr = singleObject(rule, SHACL.subject);
         Node predExpr = singleObject(rule, SHACL.predicate);
         Node objExpr  = singleObject(rule, SHACL.object);
@@ -101,12 +104,14 @@ public class ShaclAFEngine {
                 Triple t = Triple.create(s, p, o);
                 if (!dataGraph.contains(t)) {
                     dataGraph.add(t);
+                    out.add(new InferredTriple(t, shapeNode, rule, "TripleRule"));
                 }
             }
         }
     }
 
-    private void applySPARQLRule(Set<Node> focusNodes, Node rule) {
+    private void applySPARQLRule(Set<Node> focusNodes, Node rule, Node shapeNode,
+                                  List<InferredTriple> out) {
         Node constructNode = singleObject(rule, SHACL.construct);
         if (constructNode == null || !constructNode.isLiteral()) return;
 
@@ -127,7 +132,10 @@ public class ShaclAFEngine {
                     .substitution(binding)
                     .build()) {
                 qe.execConstruct().listStatements().forEachRemaining(stmt -> {
-                    if (!dataModel.contains(stmt)) dataModel.add(stmt);
+                    if (!dataModel.contains(stmt)) {
+                        dataModel.add(stmt);
+                        out.add(new InferredTriple(stmt.asTriple(), shapeNode, rule, "SPARQLRule"));
+                    }
                 });
             }
         }

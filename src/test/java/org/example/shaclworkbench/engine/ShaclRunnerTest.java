@@ -24,7 +24,7 @@ class ShaclRunnerTest {
 
         assertFalse(result.conforms(), "Alice has no ex:name — should not conform");
         assertEquals(1, result.report().getEntries().size(), "expected exactly one violation");
-        assertEquals(0, result.inferredTripleCount());
+        assertEquals(0, result.inferredTriples().size());
         assertTrue(result.reportTurtle().contains("sh:ValidationReport"));
     }
 
@@ -41,8 +41,8 @@ class ShaclRunnerTest {
         ShaclResult result = new ShaclRunner().run(config);
 
         // Alice and Bob should each gain an ex:LivingThing triple
-        assertTrue(result.inferredTripleCount() >= 2,
-                "expected at least 2 inferred triples, got " + result.inferredTripleCount());
+        assertTrue(result.inferredTriples().size() >= 2,
+                "expected at least 2 inferred triples, got " + result.inferredTriples().size());
     }
 
     private static Path fixture(String name) throws Exception {

@@ -1,6 +1,5 @@
 package org.example.shaclworkbench.engine;
 
-import org.apache.jena.graph.Triple;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.riot.Lang;
@@ -14,9 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 public class ShaclRunner {
 
@@ -38,31 +35,20 @@ public class ShaclRunner {
         }
 
         // ── 2. Inference pass (SHACL-AF: sh:TripleRule and sh:SPARQLRule) ─────
-        int inferredCount = 0;
+        List<InferredTriple> inferredTriples = List.of();
         String inferredTurtle = "";
         if (config.runInference() && !config.inferenceShapeFiles().isEmpty()) {
-            // Snapshot existing triples so we can extract exactly what was added
-            Set<Triple> before = dataModel.getGraph()
-                    .find(org.apache.jena.graph.Node.ANY,
-                          org.apache.jena.graph.Node.ANY,
-                          org.apache.jena.graph.Node.ANY)
-                    .toSet();
-
             Model inferShapesModel = loadMerged(config.inferenceShapeFiles());
             ShaclAFEngine engine = new ShaclAFEngine(
                     inferShapesModel.getGraph(), dataModel.getGraph());
-            inferredCount = engine.execute();
+            inferredTriples = engine.execute();
 
-            if (inferredCount > 0) {
-                // Build a model containing only the newly added triples
+            if (!inferredTriples.isEmpty()) {
                 Model inferredModel = ModelFactory.createDefaultModel();
                 inferredModel.setNsPrefixes(dataModel.getNsPrefixMap());
-                dataModel.getGraph()
-                         .find(org.apache.jena.graph.Node.ANY,
-                               org.apache.jena.graph.Node.ANY,
-                               org.apache.jena.graph.Node.ANY)
-                         .filterKeep(t -> !before.contains(t))
-                         .forEachRemaining(t -> inferredModel.getGraph().add(t));
+                for (InferredTriple it : inferredTriples) {
+                    inferredModel.getGraph().add(it.triple());
+                }
                 ByteArrayOutputStream ibuf = new ByteArrayOutputStream();
                 RDFDataMgr.write(ibuf, inferredModel, Lang.TURTLE);
                 inferredTurtle = ibuf.toString();
@@ -86,7 +72,7 @@ public class ShaclRunner {
         RDFDataMgr.write(baos, report.getModel(), Lang.TURTLE);
 
         return new ShaclResult(report.conforms(), report, baos.toString(),
-                inferredCount, inferredTurtle, prefixes);
+                inferredTriples, inferredTurtle, prefixes);
     }
 
     private static Model loadMerged(List<Path> paths) {

@@ -21,21 +21,16 @@ public class SessionManager {
     private static final Logger LOG = Logger.getLogger(SessionManager.class.getName());
     private static final Path STATE_FILE = Path.of(
             System.getProperty("user.home"), ".shacl-workbench", "session.properties");
+    private static final Path CONFIGS_DIR = Path.of(
+            System.getProperty("user.home"), ".shacl-workbench", "configs");
     /** Delimiter between list items — pipe cannot appear in macOS file paths. */
     private static final String SEP = "|";
 
     public static void save(SessionState state) {
         try {
             Files.createDirectories(STATE_FILE.getParent());
-            Properties p = new Properties();
-            p.setProperty("rootFolder",       state.rootFolder());
-            p.setProperty("exclusions",       join(state.exclusions()));
-            p.setProperty("dataFile",         state.dataFile());
-            p.setProperty("inferenceShapes",  join(state.inferenceShapes()));
-            p.setProperty("validationShapes", join(state.validationShapes()));
-            p.setProperty("inferAndValidate", String.valueOf(state.inferAndValidate()));
             try (OutputStream out = Files.newOutputStream(STATE_FILE)) {
-                p.store(out, "SHACL Workbench session");
+                toProperties(state).store(out, "SHACL Workbench session");
             }
         } catch (IOException e) {
             LOG.log(Level.WARNING, "Could not save session", e);
@@ -47,21 +42,79 @@ public class SessionManager {
         try (InputStream in = Files.newInputStream(STATE_FILE)) {
             Properties p = new Properties();
             p.load(in);
-            return Optional.of(new SessionState(
-                    p.getProperty("rootFolder",       ""),
-                    split(p.getProperty("exclusions",       "")),
-                    p.getProperty("dataFile",         ""),
-                    split(p.getProperty("inferenceShapes",  "")),
-                    split(p.getProperty("validationShapes", "")),
-                    Boolean.parseBoolean(p.getProperty("inferAndValidate", "true"))
-            ));
+            return Optional.of(fromProperties(p));
         } catch (IOException e) {
             LOG.log(Level.WARNING, "Could not load session", e);
             return Optional.empty();
         }
     }
 
+    // ── named configurations ──────────────────────────────────────────────────
+
+    public static void saveNamed(String name, SessionState state) {
+        try {
+            Files.createDirectories(CONFIGS_DIR);
+            Path file = CONFIGS_DIR.resolve(name + ".properties");
+            Properties p = toProperties(state);
+            try (OutputStream out = Files.newOutputStream(file)) {
+                p.store(out, "SHACL Workbench configuration: " + name);
+            }
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Could not save configuration '" + name + "'", e);
+        }
+    }
+
+    public static Optional<SessionState> loadNamed(String name) {
+        Path file = CONFIGS_DIR.resolve(name + ".properties");
+        if (!Files.exists(file)) return Optional.empty();
+        try (InputStream in = Files.newInputStream(file)) {
+            Properties p = new Properties();
+            p.load(in);
+            return Optional.of(fromProperties(p));
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Could not load configuration '" + name + "'", e);
+            return Optional.empty();
+        }
+    }
+
+    /** Returns the names of all saved configurations, sorted alphabetically. */
+    public static List<String> listConfigs() {
+        if (!Files.exists(CONFIGS_DIR)) return List.of();
+        try (var stream = Files.list(CONFIGS_DIR)) {
+            return stream
+                    .filter(p -> p.toString().endsWith(".properties"))
+                    .map(p -> p.getFileName().toString().replaceAll("\\.properties$", ""))
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Could not list configurations", e);
+            return List.of();
+        }
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    private static Properties toProperties(SessionState state) {
+        Properties p = new Properties();
+        p.setProperty("rootFolder",       state.rootFolder());
+        p.setProperty("exclusions",       join(state.exclusions()));
+        p.setProperty("dataFile",         state.dataFile());
+        p.setProperty("inferenceShapes",  join(state.inferenceShapes()));
+        p.setProperty("validationShapes", join(state.validationShapes()));
+        p.setProperty("inferAndValidate", String.valueOf(state.inferAndValidate()));
+        return p;
+    }
+
+    private static SessionState fromProperties(Properties p) {
+        return new SessionState(
+                p.getProperty("rootFolder",       ""),
+                split(p.getProperty("exclusions",       "")),
+                p.getProperty("dataFile",         ""),
+                split(p.getProperty("inferenceShapes",  "")),
+                split(p.getProperty("validationShapes", "")),
+                Boolean.parseBoolean(p.getProperty("inferAndValidate", "true"))
+        );
+    }
 
     private static String join(List<String> items) {
         return String.join(SEP, items);

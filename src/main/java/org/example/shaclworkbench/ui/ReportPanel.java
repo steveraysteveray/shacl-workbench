@@ -56,6 +56,7 @@ public class ReportPanel extends JPanel {
 
         ActionListener filterListener = e -> {
             applyFilter();
+            packColumns();
             updateStatusLabel();
         };
         filterViolation.addActionListener(filterListener);
@@ -141,28 +142,26 @@ public class ReportPanel extends JPanel {
      * AUTO_RESIZE_LAST_COLUMN triggers a compensating layout pass that corrupts widths
      * set in earlier iterations.
      */
+    /** Sizes each column to fit its widest rendered cell (header or currently visible rows). */
     private void packColumns() {
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         for (int col = 0; col < table.getColumnCount(); col++) {
             TableColumn tc = table.getColumnModel().getColumn(col);
 
-            // Header
             var hr = tc.getHeaderRenderer();
             if (hr == null) hr = table.getTableHeader().getDefaultRenderer();
             int width = hr.getTableCellRendererComponent(
                     table, tc.getHeaderValue(), false, false, -1, col)
                     .getPreferredSize().width + 8;
 
-            // Data rows (post-filter view indices)
             for (int row = 0; row < table.getRowCount(); row++) {
                 int w = table.prepareRenderer(table.getCellRenderer(row, col), row, col)
                              .getPreferredSize().width + 8;
                 if (w > width) width = w;
             }
-
             tc.setPreferredWidth(width);
         }
-        table.doLayout();   // stamp preferred widths into actual widths while in OFF mode
+        table.doLayout();
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
     }
 

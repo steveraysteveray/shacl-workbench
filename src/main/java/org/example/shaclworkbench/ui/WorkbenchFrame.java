@@ -117,6 +117,13 @@ public class WorkbenchFrame extends JFrame {
         controls.add(Box.createHorizontalStrut(16));
         runButton.setFont(runButton.getFont().deriveFont(Font.BOLD));
         controls.add(runButton);
+        controls.add(Box.createHorizontalStrut(8));
+        JButton saveConfig = new JButton("Save config…");
+        JButton loadConfig = new JButton("Load config…");
+        saveConfig.addActionListener(e -> saveNamedConfig());
+        loadConfig.addActionListener(e -> loadNamedConfig());
+        controls.add(saveConfig);
+        controls.add(loadConfig);
         sessionLabel.setFont(sessionLabel.getFont().deriveFont(Font.ITALIC));
         sessionLabel.setForeground(Color.GRAY);
         controls.add(sessionLabel);
@@ -196,33 +203,71 @@ public class WorkbenchFrame extends JFrame {
 
     private void restoreSession() {
         var loaded = SessionManager.load();
-        loaded.ifPresent(s -> {
-            rootFolderField.setText(s.rootFolder());
-            dataFileField.setText(s.dataFile());
-            s.exclusions().stream().map(Path::of).forEach(exclusionZone::addPathDirect);
-            s.inferenceShapes().stream().map(Path::of).forEach(inferenceZone::addPathDirect);
-            s.validationShapes().stream().map(Path::of).forEach(validationZone::addPathDirect);
-            if (s.inferAndValidate()) {
-                inferAndValidate.setSelected(true);
-                inferenceZone.setEnabled(true);
-            } else {
-                validateOnly.setSelected(true);
-                inferenceZone.setEnabled(false);
-            }
-        });
+        loaded.ifPresent(this::applySession);
         sessionLabel.setText(loaded.isPresent() ? "Session restored" : "No saved session");
     }
 
     private void saveSession() {
-        SessionManager.save(new SessionState(
+        SessionManager.save(currentSessionState());
+        sessionLabel.setText("Session saved");
+    }
+
+    private SessionState currentSessionState() {
+        return new SessionState(
                 rootFolderField.getText().trim(),
                 exclusionZone.getPaths().stream().map(Path::toString).toList(),
                 dataFileField.getText().trim(),
                 inferenceZone.getPaths().stream().map(Path::toString).toList(),
                 validationZone.getPaths().stream().map(Path::toString).toList(),
                 inferAndValidate.isSelected()
-        ));
-        sessionLabel.setText("Session saved");
+        );
+    }
+
+    private void applySession(SessionState s) {
+        rootFolderField.setText(s.rootFolder());
+        dataFileField.setText(s.dataFile());
+        exclusionZone.clear();
+        inferenceZone.clear();
+        validationZone.clear();
+        s.exclusions().stream().map(Path::of).forEach(exclusionZone::addPathDirect);
+        s.inferenceShapes().stream().map(Path::of).forEach(inferenceZone::addPathDirect);
+        s.validationShapes().stream().map(Path::of).forEach(validationZone::addPathDirect);
+        if (s.inferAndValidate()) {
+            inferAndValidate.setSelected(true);
+            inferenceZone.setEnabled(true);
+        } else {
+            validateOnly.setSelected(true);
+            inferenceZone.setEnabled(false);
+        }
+    }
+
+    // ── named configurations ──────────────────────────────────────────────────
+
+    private void saveNamedConfig() {
+        String name = JOptionPane.showInputDialog(this,
+                "Configuration name:", "Save configuration", JOptionPane.PLAIN_MESSAGE);
+        if (name == null || name.isBlank()) return;
+        name = name.trim();
+        SessionManager.saveNamed(name, currentSessionState());
+        sessionLabel.setText("Config '" + name + "' saved");
+    }
+
+    private void loadNamedConfig() {
+        List<String> configs = SessionManager.listConfigs();
+        if (configs.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "No saved configurations found.",
+                    "Load configuration", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String[] options = configs.toArray(String[]::new);
+        String selected = (String) JOptionPane.showInputDialog(this,
+                "Select a configuration:", "Load configuration",
+                JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+        if (selected == null) return;
+        SessionManager.loadNamed(selected).ifPresent(s -> {
+            applySession(s);
+            sessionLabel.setText("Config '" + selected + "' loaded");
+        });
     }
 
     // ── pipeline ─────────────────────────────────────────────────────────────
@@ -268,8 +313,9 @@ public class WorkbenchFrame extends JFrame {
                 try {
                     ShaclResult result = get();
                     reportPanel.showResult(result.report(), result.reportTurtle(),
-                            result.inferredTripleCount(), result.prefixMap());
-                    inferredPanel.showInferred(result.inferredTripleCount(), result.inferredTurtle());
+                            result.inferredTriples().size(), result.prefixMap());
+                    inferredPanel.showInferred(result.inferredTriples(),
+                            result.inferredTurtle(), result.prefixMap());
                     saveSession();
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
