@@ -16,8 +16,9 @@ The easiest way to use SHACL Workbench is to download the macOS installer from t
 - **Drag-and-drop** — drop folders or files onto any shapes list or input field
 - **Severity filter** — show Violations, Warnings, Info, or any combination in the report table
 - **Prefixed URIs** — focus nodes and constraints are displayed using declared prefix mappings, with a toggle to full URI
-- **Inferred triples viewer** — inspect exactly which triples were added during the inference pass
-- **Session persistence** — configuration is saved automatically on exit and restored on next launch
+- **Inferred triples viewer** — inspect each triple added during the inference pass, with the originating shape and rule type (TripleRule / SPARQLRule)
+- **Named configurations** — save and restore named workspace configurations; multiple configs can coexist for different projects
+- **Session persistence** — last-used configuration is saved automatically on exit and restored on next launch
 
 ## Prerequisites
 
@@ -100,11 +101,22 @@ Click **Run**. Results appear in the tabs below.
 - **Copy Turtle** copies the raw `sh:ValidationReport` graph; **Save report…** writes it to a file
 
 **Inferred Triples tab**
-- Shows the Turtle serialisation of only the triples added during the inference pass
+- The table shows each added triple (subject, predicate, object), the originating shape, and the rule type (TripleRule or SPARQLRule)
+- **Copy Turtle** copies the inferred triples as a Turtle document; **Save inferred…** writes it to a file
 
-### 5. Session
+### 5. Named configurations
 
-Configuration (root folder, shapes files, exclusions, mode) is saved automatically when the window is closed and restored on the next launch. The session file is stored at:
+Use **File → Save Config As…** to save the current workspace under a name. Use **File → Load Config** to restore it. Configs are stored as individual property files:
+
+```
+~/.shacl-workbench/configs/<name>.properties
+```
+
+Multiple named configs can coexist, making it easy to switch between projects.
+
+### 6. Session
+
+The last-used configuration is saved automatically when the window is closed and restored on the next launch:
 
 ```
 ~/.shacl-workbench/session.properties
