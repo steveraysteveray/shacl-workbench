@@ -142,22 +142,22 @@ public class ReportPanel extends JPanel {
      * AUTO_RESIZE_LAST_COLUMN triggers a compensating layout pass that corrupts widths
      * set in earlier iterations.
      */
-    /** Sizes each column to fit its widest rendered cell (header or currently visible rows). */
+    /**
+     * Sizes each column to fit its widest content (header or currently visible rows).
+     * Uses FontMetrics directly rather than renderer.getPreferredSize() to avoid the
+     * stale-cache problem in DefaultTableCellRenderer.
+     */
     private void packColumns() {
+        FontMetrics fm = table.getFontMetrics(table.getFont());
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         for (int col = 0; col < table.getColumnCount(); col++) {
             TableColumn tc = table.getColumnModel().getColumn(col);
-
-            var hr = tc.getHeaderRenderer();
-            if (hr == null) hr = table.getTableHeader().getDefaultRenderer();
-            int width = hr.getTableCellRendererComponent(
-                    table, tc.getHeaderValue(), false, false, -1, col)
-                    .getPreferredSize().width + 8;
-
+            // Header: extra padding for the sort indicator
+            int width = fm.stringWidth(table.getColumnName(col)) + 24;
+            // Visible data rows
             for (int row = 0; row < table.getRowCount(); row++) {
-                int w = table.prepareRenderer(table.getCellRenderer(row, col), row, col)
-                             .getPreferredSize().width + 8;
-                if (w > width) width = w;
+                Object val = table.getValueAt(row, col);
+                if (val != null) width = Math.max(width, fm.stringWidth(val.toString()) + 16);
             }
             tc.setPreferredWidth(width);
         }
