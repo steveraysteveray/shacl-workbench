@@ -1,9 +1,9 @@
 package org.example.shaclworkbench;
 
 import org.example.shaclworkbench.ui.WorkbenchFrame;
+import org.example.shaclworkbench.ui.theme.CopperSteamTheme;
 
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 
 public class Main {
     public static void main(String[] args) {
@@ -11,9 +11,8 @@ public class Main {
         System.setProperty("apple.awt.application.name", "SHACL Workbench");
         System.setProperty("apple.laf.useScreenMenuBar", "true");
 
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception ignored) {}
+        // "Copper & Steam" steampunk theme (Metal LAF base)
+        CopperSteamTheme.install();
 
         SwingUtilities.invokeLater(WorkbenchFrame::new);
     }

@@ -259,6 +259,10 @@ public class ReportPanel extends JPanel {
                 JTable table, Object value, boolean selected, boolean focused, int row, int col) {
             super.getTableCellRendererComponent(table, value, selected, focused, row, col);
             setToolTipText(value != null ? value.toString() : null);
+            if (!selected) {
+                Color alt = UIManager.getColor("Table.alternateRowColor");
+                setBackground(row % 2 != 0 && alt != null ? alt : table.getBackground());
+            }
             return this;
         }
     }

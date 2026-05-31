@@ -25,10 +25,15 @@ public class WorkbenchFrame extends JFrame {
     private final DropZone validationZone = new DropZone("Validation shapes");
     private final JRadioButton inferAndValidate = new JRadioButton("Infer + Validate", true);
     private final JRadioButton validateOnly     = new JRadioButton("Validate only");
-    private final JButton runButton = new JButton("Run");
+    private final JButton runButton = new JButton("⚙  Run");
     private final JLabel sessionLabel = new JLabel("");
-    private final ReportPanel reportPanel       = new ReportPanel();
-    private final InferredTriplesPanel inferredPanel = new InferredTriplesPanel();
+
+    // ── progress indicator ────────────────────────────────────────────────────
+    private final JProgressBar progressBar   = new JProgressBar();
+    private final JLabel       progressLabel = new JLabel();
+
+    private final ReportPanel reportPanel             = new ReportPanel();
+    private final InferredTriplesPanel inferredPanel  = new InferredTriplesPanel();
 
     public WorkbenchFrame() {
         super("SHACL Workbench");
@@ -45,7 +50,7 @@ public class WorkbenchFrame extends JFrame {
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
                 buildCenterPanel(), buildBottomPanel());
-        split.setResizeWeight(0.0);   // extra height on resize goes to the bottom (report) pane
+        split.setResizeWeight(0.0);
         split.setBorder(null);
 
         add(buildTopPanel(), BorderLayout.NORTH);
@@ -75,7 +80,6 @@ public class WorkbenchFrame extends JFrame {
         gbc.insets = new Insets(2, 4, 2, 4);
         gbc.anchor = GridBagConstraints.WEST;
 
-        // Row 0: root folder — accepts a dropped folder
         gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("Root folder:"), gbc);
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
         rootFolderField.setEditable(false);
@@ -86,7 +90,6 @@ public class WorkbenchFrame extends JFrame {
         gbc.gridx = 2; panel.add(browseButton("Browse…", true, rootFolderField), gbc);
         gbc.gridx = 3; panel.add(clearButton(rootFolderField), gbc);
 
-        // Row 1: data file — accepts a dropped file
         gbc.gridx = 0; gbc.gridy = 1; panel.add(new JLabel("Data file:"), gbc);
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1;
         dataFileField.setEditable(false);
@@ -117,6 +120,17 @@ public class WorkbenchFrame extends JFrame {
         controls.add(Box.createHorizontalStrut(16));
         runButton.setFont(runButton.getFont().deriveFont(Font.BOLD));
         controls.add(runButton);
+
+        // Progress indicator — visible only while a run is in flight
+        progressBar.setIndeterminate(false);
+        progressBar.setPreferredSize(new Dimension(110, runButton.getPreferredSize().height - 4));
+        progressBar.setVisible(false);
+        controls.add(progressBar);
+
+        progressLabel.setFont(progressLabel.getFont().deriveFont(Font.ITALIC, 11f));
+        progressLabel.setForeground(Color.GRAY);
+        controls.add(progressLabel);
+
         controls.add(Box.createHorizontalStrut(8));
         JButton saveConfig = new JButton("Save config…");
         JButton loadConfig = new JButton("Load config…");
@@ -140,11 +154,6 @@ public class WorkbenchFrame extends JFrame {
 
     // ── drag-drop for root-folder / data-file fields ─────────────────────────
 
-    /**
-     * Installs a drop target on a read-only text field.
-     * dirOnly=true: only the first dropped directory is accepted.
-     * dirOnly=false: only the first dropped file is accepted.
-     */
     private void installFieldDrop(JTextField field, boolean dirOnly) {
         new DropTarget(field, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
             @Override
@@ -300,16 +309,28 @@ public class WorkbenchFrame extends JFrame {
         runButton.setEnabled(false);
         reportPanel.clear();
         inferredPanel.clear();
+        progressBar.setVisible(true);
+        progressBar.setIndeterminate(true);
+        progressLabel.setText("Starting…");
 
-        SwingWorker<ShaclResult, Void> worker = new SwingWorker<>() {
+        SwingWorker<ShaclResult, String> worker = new SwingWorker<>() {
             @Override
             protected ShaclResult doInBackground() throws Exception {
-                return new ShaclRunner().run(config);
+                return new ShaclRunner().run(config, msg -> publish(msg));
+            }
+
+            @Override
+            protected void process(List<String> chunks) {
+                // SwingWorker batches calls; show only the latest message
+                progressLabel.setText(chunks.get(chunks.size() - 1));
             }
 
             @Override
             protected void done() {
                 runButton.setEnabled(true);
+                progressBar.setVisible(false);
+                progressBar.setIndeterminate(false);
+                progressLabel.setText("");
                 try {
                     ShaclResult result = get();
                     reportPanel.showResult(result.report(), result.reportTurtle(),

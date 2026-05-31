@@ -14,23 +14,37 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class ShaclRunner {
 
+    /** Runs the pipeline with no progress reporting. */
     public ShaclResult run(ShaclConfig config) throws IOException {
+        return run(config, ignored -> {});
+    }
+
+    /**
+     * Runs the pipeline, calling {@code progress} with a short status string at
+     * each phase boundary (and per-file while loading) so the UI can display a
+     * live indicator rather than appearing hung.
+     */
+    public ShaclResult run(ShaclConfig config, Consumer<String> progress) throws IOException {
         // ── 1. Build the data graph ───────────────────────────────────────────
-        // Workspace files provide background context (schemas, ontologies, etc.);
-        // the data file is the focus of validation.
         Model dataModel = ModelFactory.createDefaultModel();
 
         if (config.rootDir() != null) {
+            progress.accept("Loading workspace files…");
             try (var stream = Files.walk(config.rootDir())) {
                 stream.filter(p -> p.toString().endsWith(".ttl"))
                       .filter(p -> config.excludedPaths().stream().noneMatch(p::startsWith))
-                      .forEach(p -> RDFDataMgr.read(dataModel, p.toUri().toString()));
+                      .forEach(p -> {
+                          progress.accept("Loading " + p.getFileName() + "…");
+                          RDFDataMgr.read(dataModel, p.toUri().toString());
+                      });
             }
         }
         if (config.dataFile() != null) {
+            progress.accept("Loading " + config.dataFile().getFileName() + "…");
             RDFDataMgr.read(dataModel, config.dataFile().toUri().toString());
         }
 
@@ -38,6 +52,7 @@ public class ShaclRunner {
         List<InferredTriple> inferredTriples = List.of();
         String inferredTurtle = "";
         if (config.runInference() && !config.inferenceShapeFiles().isEmpty()) {
+            progress.accept("Running inference…");
             Model inferShapesModel = loadMerged(config.inferenceShapeFiles());
             ShaclAFEngine engine = new ShaclAFEngine(
                     inferShapesModel.getGraph(), dataModel.getGraph());
@@ -56,13 +71,14 @@ public class ShaclRunner {
         }
 
         // ── 3. Validation pass ────────────────────────────────────────────────
+        progress.accept("Validating…");
         Model validationShapesModel = loadMerged(config.validationShapeFiles());
         Shapes validationShapes = Shapes.parse(validationShapesModel.getGraph());
         ValidationReport report = ShaclValidator.get().validate(
                 validationShapes, dataModel.getGraph());
 
         // ── 4. Merge prefix declarations from every loaded file ───────────────
-        // Used by the UI to display prefixed URIs (e.g. ex:Alice) in the report.
+        progress.accept("Serializing report…");
         PrefixMapping prefixes = PrefixMapping.Factory.create();
         prefixes.setNsPrefixes(dataModel);
         prefixes.setNsPrefixes(validationShapesModel);
