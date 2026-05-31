@@ -12,5 +12,6 @@ public record SessionState(
         String dataFile,
         List<String> inferenceShapes,
         List<String> validationShapes,
-        boolean inferAndValidate
+        boolean inferAndValidate,
+        int fontSize
 ) {}

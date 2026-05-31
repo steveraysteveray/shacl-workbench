@@ -5,11 +5,14 @@ import org.example.shaclworkbench.engine.ShaclResult;
 import org.example.shaclworkbench.engine.ShaclRunner;
 import org.example.shaclworkbench.session.SessionManager;
 import org.example.shaclworkbench.session.SessionState;
+import org.example.shaclworkbench.ui.theme.CopperSteamTheme;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.dnd.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -28,12 +31,11 @@ public class WorkbenchFrame extends JFrame {
     private final JButton runButton = new JButton("⚙  Run");
     private final JLabel sessionLabel = new JLabel("");
 
-    // ── progress indicator ────────────────────────────────────────────────────
     private final JProgressBar progressBar   = new JProgressBar();
     private final JLabel       progressLabel = new JLabel();
 
-    private final ReportPanel reportPanel             = new ReportPanel();
-    private final InferredTriplesPanel inferredPanel  = new InferredTriplesPanel();
+    private final ReportPanel          reportPanel   = new ReportPanel();
+    private final InferredTriplesPanel inferredPanel = new InferredTriplesPanel();
 
     public WorkbenchFrame() {
         super("SHACL Workbench");
@@ -64,6 +66,7 @@ public class WorkbenchFrame extends JFrame {
 
         runButton.addActionListener(e -> runPipeline());
 
+        installFontSizeBindings();
         restoreSession();
 
         pack();
@@ -71,7 +74,47 @@ public class WorkbenchFrame extends JFrame {
         setVisible(true);
     }
 
-    // ── panels ───────────────────────────────────────────────────────────────
+    // ── font scaling ──────────────────────────────────────────────────────────
+
+    private void installFontSizeBindings() {
+        int cmd = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        InputMap  im = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = getRootPane().getActionMap();
+
+        // CMD-=  and  CMD-Shift-= (i.e. CMD-+)  →  larger
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, cmd),                              "font+");
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, cmd | KeyEvent.SHIFT_DOWN_MASK),   "font+");
+        // CMD--  →  smaller
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_MINUS,  cmd),                              "font-");
+        // CMD-0  →  reset
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_0,      cmd),                              "font0");
+
+        am.put("font+", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) { adjustFontSize(+1); }
+        });
+        am.put("font-", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) { adjustFontSize(-1); }
+        });
+        am.put("font0", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                CopperSteamTheme.setBaseFontSize(CopperSteamTheme.DEFAULT_FONT_SIZE);
+                CopperSteamTheme.reinstall(WorkbenchFrame.this);
+                reportPanel.packColumns();
+                inferredPanel.packColumns();
+                saveSession();
+            }
+        });
+    }
+
+    private void adjustFontSize(int delta) {
+        CopperSteamTheme.setBaseFontSize(CopperSteamTheme.getBaseFontSize() + delta);
+        CopperSteamTheme.reinstall(this);
+        reportPanel.packColumns();
+        inferredPanel.packColumns();
+        saveSession();
+    }
+
+    // ── panels ────────────────────────────────────────────────────────────────
 
     private JPanel buildTopPanel() {
         JPanel panel = new JPanel(new GridBagLayout());
@@ -87,7 +130,7 @@ public class WorkbenchFrame extends JFrame {
         installFieldDrop(rootFolderField, true);
         panel.add(rootFolderField, gbc);
         gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
-        gbc.gridx = 2; panel.add(browseButton("Browse…", true, rootFolderField), gbc);
+        gbc.gridx = 2; panel.add(browseButton("Browse…", true,  rootFolderField), gbc);
         gbc.gridx = 3; panel.add(clearButton(rootFolderField), gbc);
 
         gbc.gridx = 0; gbc.gridy = 1; panel.add(new JLabel("Data file:"), gbc);
@@ -121,7 +164,6 @@ public class WorkbenchFrame extends JFrame {
         runButton.setFont(runButton.getFont().deriveFont(Font.BOLD));
         controls.add(runButton);
 
-        // Progress indicator — visible only while a run is in flight
         progressBar.setIndeterminate(false);
         progressBar.setPreferredSize(new Dimension(110, runButton.getPreferredSize().height - 4));
         progressBar.setVisible(false);
@@ -144,15 +186,15 @@ public class WorkbenchFrame extends JFrame {
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("Validation Report", reportPanel);
-        tabs.addTab("Inferred Triples", inferredPanel);
+        tabs.addTab("Inferred Triples",  inferredPanel);
         tabs.setPreferredSize(new Dimension(800, 260));
 
         panel.add(controls, BorderLayout.NORTH);
-        panel.add(tabs, BorderLayout.CENTER);
+        panel.add(tabs,     BorderLayout.CENTER);
         return panel;
     }
 
-    // ── drag-drop for root-folder / data-file fields ─────────────────────────
+    // ── drag-drop for text fields ─────────────────────────────────────────────
 
     private void installFieldDrop(JTextField field, boolean dirOnly) {
         new DropTarget(field, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
@@ -163,7 +205,6 @@ public class WorkbenchFrame extends JFrame {
                 else
                     e.rejectDrag();
             }
-
             @Override
             @SuppressWarnings("unchecked")
             public void drop(DropTargetDropEvent e) {
@@ -172,32 +213,24 @@ public class WorkbenchFrame extends JFrame {
                     List<File> files = (List<File>) e.getTransferable()
                             .getTransferData(DataFlavor.javaFileListFlavor);
                     for (File f : files) {
-                        if (dirOnly && f.isDirectory()) {
-                            field.setText(f.getAbsolutePath());
-                            break;
-                        } else if (!dirOnly && f.isFile()) {
-                            field.setText(f.getAbsolutePath());
-                            break;
-                        }
+                        if (dirOnly && f.isDirectory())  { field.setText(f.getAbsolutePath()); break; }
+                        if (!dirOnly && f.isFile())       { field.setText(f.getAbsolutePath()); break; }
                     }
                     e.dropComplete(true);
-                } catch (Exception ex) {
-                    e.dropComplete(false);
-                }
+                } catch (Exception ex) { e.dropComplete(false); }
             }
         });
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
 
     private JButton browseButton(String label, boolean dirOnly, JTextField target) {
         JButton btn = new JButton(label);
         btn.addActionListener(e -> {
             JFileChooser fc = new JFileChooser();
             fc.setFileSelectionMode(dirOnly ? JFileChooser.DIRECTORIES_ONLY : JFileChooser.FILES_ONLY);
-            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
                 target.setText(fc.getSelectedFile().getAbsolutePath());
-            }
         });
         return btn;
     }
@@ -212,7 +245,11 @@ public class WorkbenchFrame extends JFrame {
 
     private void restoreSession() {
         var loaded = SessionManager.load();
-        loaded.ifPresent(this::applySession);
+        loaded.ifPresent(s -> {
+            applySession(s);
+            CopperSteamTheme.setBaseFontSize(s.fontSize());
+            CopperSteamTheme.reinstall(this);
+        });
         sessionLabel.setText(loaded.isPresent() ? "Session restored" : "No saved session");
     }
 
@@ -228,26 +265,20 @@ public class WorkbenchFrame extends JFrame {
                 dataFileField.getText().trim(),
                 inferenceZone.getPaths().stream().map(Path::toString).toList(),
                 validationZone.getPaths().stream().map(Path::toString).toList(),
-                inferAndValidate.isSelected()
+                inferAndValidate.isSelected(),
+                CopperSteamTheme.getBaseFontSize()
         );
     }
 
     private void applySession(SessionState s) {
         rootFolderField.setText(s.rootFolder());
         dataFileField.setText(s.dataFile());
-        exclusionZone.clear();
-        inferenceZone.clear();
-        validationZone.clear();
+        exclusionZone.clear(); inferenceZone.clear(); validationZone.clear();
         s.exclusions().stream().map(Path::of).forEach(exclusionZone::addPathDirect);
         s.inferenceShapes().stream().map(Path::of).forEach(inferenceZone::addPathDirect);
         s.validationShapes().stream().map(Path::of).forEach(validationZone::addPathDirect);
-        if (s.inferAndValidate()) {
-            inferAndValidate.setSelected(true);
-            inferenceZone.setEnabled(true);
-        } else {
-            validateOnly.setSelected(true);
-            inferenceZone.setEnabled(false);
-        }
+        if (s.inferAndValidate()) { inferAndValidate.setSelected(true); inferenceZone.setEnabled(true); }
+        else                      { validateOnly.setSelected(true);     inferenceZone.setEnabled(false); }
     }
 
     // ── named configurations ──────────────────────────────────────────────────
@@ -279,7 +310,7 @@ public class WorkbenchFrame extends JFrame {
         });
     }
 
-    // ── pipeline ─────────────────────────────────────────────────────────────
+    // ── pipeline ──────────────────────────────────────────────────────────────
 
     private void runPipeline() {
         String rootText     = rootFolderField.getText().trim();
@@ -299,12 +330,11 @@ public class WorkbenchFrame extends JFrame {
 
         Path rootDir  = rootText.isEmpty()     ? null : Path.of(rootText);
         Path dataFile = dataFileText.isEmpty() ? null : Path.of(dataFileText);
-        List<Path> excludedPaths = exclusionZone.getPaths();
         boolean doInfer = inferAndValidate.isSelected();
-        List<Path> inferPaths = doInfer ? inferenceZone.getPaths() : List.of();
-
         ShaclConfig config = new ShaclConfig(
-                rootDir, excludedPaths, dataFile, inferPaths, validationPaths, doInfer);
+                rootDir, exclusionZone.getPaths(), dataFile,
+                doInfer ? inferenceZone.getPaths() : List.of(),
+                validationPaths, doInfer);
 
         runButton.setEnabled(false);
         reportPanel.clear();
@@ -314,19 +344,13 @@ public class WorkbenchFrame extends JFrame {
         progressLabel.setText("Starting…");
 
         SwingWorker<ShaclResult, String> worker = new SwingWorker<>() {
-            @Override
-            protected ShaclResult doInBackground() throws Exception {
+            @Override protected ShaclResult doInBackground() throws Exception {
                 return new ShaclRunner().run(config, msg -> publish(msg));
             }
-
-            @Override
-            protected void process(List<String> chunks) {
-                // SwingWorker batches calls; show only the latest message
+            @Override protected void process(List<String> chunks) {
                 progressLabel.setText(chunks.get(chunks.size() - 1));
             }
-
-            @Override
-            protected void done() {
+            @Override protected void done() {
                 runButton.setEnabled(true);
                 progressBar.setVisible(false);
                 progressBar.setIndeterminate(false);
@@ -341,7 +365,8 @@ public class WorkbenchFrame extends JFrame {
                 } catch (Exception ex) {
                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                     JOptionPane.showMessageDialog(WorkbenchFrame.this,
-                            "Error: " + cause.getMessage(), "Pipeline failed", JOptionPane.ERROR_MESSAGE);
+                            "Error: " + cause.getMessage(), "Pipeline failed",
+                            JOptionPane.ERROR_MESSAGE);
                 }
             }
         };
