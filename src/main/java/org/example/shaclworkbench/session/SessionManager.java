@@ -102,17 +102,25 @@ public class SessionManager {
         p.setProperty("inferenceShapes",  join(state.inferenceShapes()));
         p.setProperty("validationShapes", join(state.validationShapes()));
         p.setProperty("inferAndValidate", String.valueOf(state.inferAndValidate()));
+        p.setProperty("fontSize",         String.valueOf(state.fontSize()));
         return p;
     }
 
     private static SessionState fromProperties(Properties p) {
+        int fontSize;
+        try {
+            fontSize = Integer.parseInt(p.getProperty("fontSize", "13"));
+        } catch (NumberFormatException e) {
+            fontSize = 13;
+        }
         return new SessionState(
                 p.getProperty("rootFolder",       ""),
                 split(p.getProperty("exclusions",       "")),
                 p.getProperty("dataFile",         ""),
                 split(p.getProperty("inferenceShapes",  "")),
                 split(p.getProperty("validationShapes", "")),
-                Boolean.parseBoolean(p.getProperty("inferAndValidate", "true"))
+                Boolean.parseBoolean(p.getProperty("inferAndValidate", "true")),
+                fontSize
         );
     }
 

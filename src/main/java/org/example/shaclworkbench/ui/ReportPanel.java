@@ -4,6 +4,7 @@ import org.apache.jena.shared.PrefixMapping;
 import org.apache.jena.shacl.ValidationReport;
 import org.apache.jena.shacl.validation.ReportEntry;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -12,6 +13,7 @@ import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionListener;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -19,6 +21,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ReportPanel extends JPanel {
+
+    private static final BufferedImage WATERMARK;
+    static {
+        BufferedImage img = null;
+        try (var in = ReportPanel.class.getResourceAsStream("/watermark.png")) {
+            if (in != null) img = ImageIO.read(in);
+        } catch (Exception ignored) {}
+        WATERMARK = img;
+    }
 
     private final JLabel statusLabel   = new JLabel("No results yet.");
     private final JLabel inferredLabel = new JLabel();
@@ -28,7 +39,25 @@ public class ReportPanel extends JPanel {
     private final JCheckBox filterInfo      = new JCheckBox("Info",      true);
 
     private final ReportTableModel tableModel = new ReportTableModel();
-    private final JTable table = new JTable(tableModel);
+    private final JTable table = new JTable(tableModel) {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (getRowCount() == 0 && WATERMARK != null) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.15f));
+                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                        RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                int sz = (int)(Math.min(getWidth(), getHeight()) * 0.9);
+                if (sz > 0) {
+                    int x = (getWidth()  - sz) / 2;
+                    int y = (getHeight() - sz) / 2;
+                    g2.drawImage(WATERMARK, x, y, sz, sz, null);
+                }
+                g2.dispose();
+            }
+        }
+    };
     private final TableRowSorter<ReportTableModel> sorter = new TableRowSorter<>(tableModel);
 
     private String currentReportTurtle = "";
@@ -40,6 +69,7 @@ public class ReportPanel extends JPanel {
         setBorder(BorderFactory.createTitledBorder("Validation report"));
 
         table.setRowSorter(sorter);
+        table.setFillsViewportHeight(true);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getColumnModel().getColumn(0).setPreferredWidth(200);
@@ -136,18 +166,7 @@ public class ReportPanel extends JPanel {
         }
     }
 
-    /**
-     * Sets each column's preferred width to fit its widest rendered cell (header or data).
-     * AUTO_RESIZE_OFF is set during the loop because each setPreferredWidth call under
-     * AUTO_RESIZE_LAST_COLUMN triggers a compensating layout pass that corrupts widths
-     * set in earlier iterations.
-     */
-    /**
-     * Sizes each column to fit its widest content (header or currently visible rows).
-     * Uses FontMetrics directly rather than renderer.getPreferredSize() to avoid the
-     * stale-cache problem in DefaultTableCellRenderer.
-     */
-    private void packColumns() {
+    public void packColumns() {
         FontMetrics fm = table.getFontMetrics(table.getFont());
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         for (int col = 0; col < table.getColumnCount(); col++) {

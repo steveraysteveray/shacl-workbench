@@ -4,6 +4,7 @@ import org.apache.jena.graph.Node;
 import org.apache.jena.shared.PrefixMapping;
 import org.example.shaclworkbench.engine.InferredTriple;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -11,6 +12,7 @@ import javax.swing.table.TableColumn;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -18,9 +20,36 @@ import java.util.List;
 
 public class InferredTriplesPanel extends JPanel {
 
+    private static final BufferedImage WATERMARK;
+    static {
+        BufferedImage img = null;
+        try (var in = InferredTriplesPanel.class.getResourceAsStream("/watermark.png")) {
+            if (in != null) img = ImageIO.read(in);
+        } catch (Exception ignored) {}
+        WATERMARK = img;
+    }
+
     private final JLabel countLabel = new JLabel("No inference run yet.");
     private final InferredTableModel tableModel = new InferredTableModel();
-    private final JTable table = new JTable(tableModel);
+    private final JTable table = new JTable(tableModel) {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (getRowCount() == 0 && WATERMARK != null) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.15f));
+                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                        RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                int sz = (int)(Math.min(getWidth(), getHeight()) * 0.9);
+                if (sz > 0) {
+                    int x = (getWidth()  - sz) / 2;
+                    int y = (getHeight() - sz) / 2;
+                    g2.drawImage(WATERMARK, x, y, sz, sz, null);
+                }
+                g2.dispose();
+            }
+        }
+    };
     private final TableRowSorter<InferredTableModel> sorter = new TableRowSorter<>(tableModel);
     private String currentTurtle = "";
 
@@ -28,6 +57,7 @@ public class InferredTriplesPanel extends JPanel {
         super(new BorderLayout(4, 4));
 
         table.setRowSorter(sorter);
+        table.setFillsViewportHeight(true);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setDefaultRenderer(Object.class, new TooltipRenderer());
@@ -69,7 +99,7 @@ public class InferredTriplesPanel extends JPanel {
 
     // ── column packing ────────────────────────────────────────────────────────
 
-    private void packColumns() {
+    public void packColumns() {
         FontMetrics fm = table.getFontMetrics(table.getFont());
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         for (int col = 0; col < table.getColumnCount(); col++) {
