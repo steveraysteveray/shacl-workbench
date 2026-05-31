@@ -16,10 +16,20 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.List;
 
 public class WorkbenchFrame extends JFrame {
+
+    private static final String APP_VERSION  = "1.2";
+    private static final String JENA_VERSION = "5.6.0";
+    private static final String README_URL   = "https://github.com/steveraysteveray/shacl-workbench#readme";
+    private static final String SHACL_URL    = "https://www.w3.org/TR/shacl/";
+    private static final String SHACL_AF_URL = "https://www.w3.org/TR/shacl-af/";
+
 
     private final JTextField rootFolderField = new JTextField(40);
     private final JTextField dataFileField   = new JTextField(40);
@@ -68,6 +78,7 @@ public class WorkbenchFrame extends JFrame {
 
         installFontSizeBindings();
         restoreSession();
+        setJMenuBar(buildMenuBar());
 
         pack();
         setLocationRelativeTo(null);
@@ -308,6 +319,113 @@ public class WorkbenchFrame extends JFrame {
             applySession(s);
             sessionLabel.setText("Config '" + selected + "' loaded");
         });
+    }
+
+    // ── menu ──────────────────────────────────────────────────────────────────
+
+    private JMenuBar buildMenuBar() {
+        JMenu help = new JMenu("Help");
+
+        JMenuItem shortcuts = new JMenuItem("Keyboard Shortcuts");
+        shortcuts.addActionListener(e -> showKeyboardShortcuts());
+        help.add(shortcuts);
+
+        JMenuItem guide = new JMenuItem("User Guide…");
+        guide.addActionListener(e -> openUrl(README_URL));
+        help.add(guide);
+
+        JMenuItem shaclSpec = new JMenuItem("SHACL Specification…");
+        shaclSpec.addActionListener(e -> openUrl(SHACL_URL));
+        help.add(shaclSpec);
+
+        JMenuItem shaclAfSpec = new JMenuItem("SHACL-AF Specification…");
+        shaclAfSpec.addActionListener(e -> openUrl(SHACL_AF_URL));
+        help.add(shaclAfSpec);
+
+        help.addSeparator();
+
+        JMenuItem openConfigs = new JMenuItem("Open Config Folder");
+        openConfigs.addActionListener(e -> openConfigFolder());
+        help.add(openConfigs);
+
+        help.addSeparator();
+
+        JMenuItem about = new JMenuItem("About SHACL Workbench");
+        about.addActionListener(e -> showAbout());
+        help.add(about);
+
+        JMenuBar bar = new JMenuBar();
+        bar.add(help);
+        return bar;
+    }
+
+    private void showKeyboardShortcuts() {
+        String html = "<html><table cellpadding='3'>"
+                + "<tr><td><b>⌘ =</b></td><td>&nbsp;&nbsp;</td><td>Increase font size</td></tr>"
+                + "<tr><td><b>⌘ +</b></td><td>&nbsp;&nbsp;</td><td>Increase font size</td></tr>"
+                + "<tr><td><b>⌘ −</b></td><td>&nbsp;&nbsp;</td><td>Decrease font size</td></tr>"
+                + "<tr><td><b>⌘ 0</b></td><td>&nbsp;&nbsp;</td><td>Reset font size</td></tr>"
+                + "</table></html>";
+        JOptionPane.showMessageDialog(this, new JLabel(html),
+                "Keyboard Shortcuts", JOptionPane.PLAIN_MESSAGE);
+    }
+
+    private void showAbout() {
+        JDialog dlg = new JDialog(this, "About SHACL Workbench", true);
+
+        JPanel content = new JPanel(new BorderLayout(20, 0));
+        content.setBorder(BorderFactory.createEmptyBorder(16, 16, 12, 16));
+
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.add(new JLabel("<html><b>SHACL Workbench</b></html>"));
+        textPanel.add(Box.createVerticalStrut(8));
+        textPanel.add(new JLabel("Version " + APP_VERSION));
+        textPanel.add(new JLabel("Apache Jena " + JENA_VERSION));
+        textPanel.add(Box.createVerticalStrut(8));
+        textPanel.add(new JLabel("<html>A desktop workbench for SHACL<br>"
+                + "inference and validation over RDF datasets.</html>"));
+        content.add(textPanel, BorderLayout.CENTER);
+
+        try {
+            var url = getClass().getResource("/icon.png");
+            if (url != null) {
+                BufferedImage img = ImageIO.read(url);
+                if (img != null) content.add(new JLabel(new ImageIcon(img)), BorderLayout.EAST);
+            }
+        } catch (Exception ignored) {}
+
+        JButton ok = new JButton("OK");
+        ok.addActionListener(e -> dlg.dispose());
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 4));
+        btnPanel.add(ok);
+        content.add(btnPanel, BorderLayout.SOUTH);
+
+        dlg.setContentPane(content);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setResizable(false);
+        dlg.setVisible(true);
+    }
+
+    private void openUrl(String url) {
+        try {
+            Desktop.getDesktop().browse(new URI(url));
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not open: " + url,
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void openConfigFolder() {
+        try {
+            Path dir = Path.of(System.getProperty("user.home"), ".shacl-workbench");
+            java.nio.file.Files.createDirectories(dir);
+            Desktop.getDesktop().open(dir.toFile());
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Could not open config folder.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     // ── pipeline ──────────────────────────────────────────────────────────────
