@@ -32,7 +32,7 @@ sh:select """
 **Example:** The QUDT ontology defines its own function library under
 (prefix `qfn:`), implemented in the
 TopBraid SHACL engine that the QUDT Maven build uses. For more information on QUDT, see
-the [QUDT repository(https://github.com/qudt/qudt-public-repo). Jena has no
+the [QUDT repository](https://github.com/qudt/qudt-public-repo). Jena has no
 implementation of these functions. See the table below.
 
 ### QUDT shapes files — compatibility summary
