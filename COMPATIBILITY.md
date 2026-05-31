@@ -29,8 +29,10 @@ sh:select """
 """
 ```
 
-**Example:** The QUDT ontology build uses TopBraid's `qfn:` library extensively
-in its QA shapes. See the table below.
+**Example:** The QUDT ontology defines its own function library under
+`http://qudt.org/shacl/functions#` (prefix `qfn:`), implemented in the
+TopBraid SHACL engine that the QUDT Maven build uses. Jena has no
+implementation of these functions. See the table below.
 
 ### QUDT shapes files — compatibility summary
 

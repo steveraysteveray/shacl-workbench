@@ -136,7 +136,7 @@ The Workbench uses the Apache Jena SHACL engine, which implements the W3C SHACL 
 SHACL-AF standards. Shapes files that rely on capabilities outside those standards may
 produce silent failures or incorrect results. The main categories to be aware of:
 
-- **Custom SPARQL function libraries** (e.g. TopBraid's `qfn:`) — unknown functions are silently skipped
+- **Custom SPARQL function libraries** (e.g. QUDT's `qfn:`) — unknown functions are silently skipped
 - **SHACL-JS** (JavaScript constraints) — not supported by Jena; silently ignored
 - **OWL entailment** — validation runs against asserted triples only; OWL-inferred facts are not present
 - **`owl:imports`** — imported ontologies are not fetched automatically
