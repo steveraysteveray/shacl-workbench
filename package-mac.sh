@@ -3,7 +3,7 @@
 # Output: dist/SHACL Workbench-<VERSION>.dmg
 set -euo pipefail
 
-VERSION="1.2"
+VERSION="1.3"
 JAR="shacl-workbench-1.0-SNAPSHOT.jar"
 APP_NAME="SHACL Workbench"
 

@@ -24,7 +24,7 @@ import java.util.List;
 
 public class WorkbenchFrame extends JFrame {
 
-    private static final String APP_VERSION  = "1.2";
+    private static final String APP_VERSION  = "1.3";
     private static final String JENA_VERSION = "5.6.0";
     private static final String README_URL   = "https://github.com/steveraysteveray/shacl-workbench#readme";
     private static final String SHACL_URL    = "https://www.w3.org/TR/shacl/";
