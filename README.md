@@ -129,3 +129,20 @@ mvn test
 ```
 
 The test suite validates that the Jena pipeline correctly detects constraint violations and that the SHACL-AF inference engine adds the expected triples.
+
+## Compatibility notes
+
+The Workbench uses the Apache Jena SHACL engine, which implements the W3C SHACL and
+SHACL-AF standards. Shapes files that rely on capabilities outside those standards may
+produce silent failures or incorrect results. The main categories to be aware of:
+
+- **Custom SPARQL function libraries** (e.g. TopBraid's `qfn:`) — unknown functions are silently skipped
+- **SHACL-JS** (JavaScript constraints) — not supported by Jena; silently ignored
+- **OWL entailment** — validation runs against asserted triples only; OWL-inferred facts are not present
+- **`owl:imports`** — imported ontologies are not fetched automatically
+- **Non-Turtle formats** — only `.ttl` files are loaded; RDF/XML, JSON-LD, etc. are skipped
+- **Named graphs** — all files are merged into a single default graph
+- **Federated SPARQL** (`SERVICE` in constraints) — remote endpoints are not queried
+
+See [COMPATIBILITY.md](COMPATIBILITY.md) for details and workarounds, including a
+per-file compatibility table for QUDT shapes.
