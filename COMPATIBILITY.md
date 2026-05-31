@@ -40,7 +40,7 @@ implementation of these functions. See the table below.
 |---|---|---|
 | `QUDT_SRC_QA_TESTS.ttl` | 0 | ✅ Reliable |
 | `SHACL-SHACL.ttl` | 0 | ✅ Reliable |
-| `COLLECTION_QUDT_USER_TESTS.ttl` | 2 (`qfn:dimVec.normalize`) | ⚠️ Mostly reliable — the 223standard use case works in practice |
+| `COLLECTION_QUDT_USER_TESTS.ttl` | 0 | ✅ Reliable |
 | `COLLECTION_QUDT_QA_TESTS_ALL.ttl` | 28 (`dimVec`, `conversionMultiplier`, `bound`…) | ❌ False violations expected |
 | `sparql2shacl/*/infer.ttl` and `validate.ttl` | Many (`qfn:unit.dimVec.calculate`, `qfn:decimalToDouble`, …) | ❌ Not suitable |
 
