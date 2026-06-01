@@ -11,12 +11,14 @@ page describes each category, its effect, and how to recognise it.
 ## 1. Custom SPARQL function libraries
 
 SHACL shapes can call SPARQL extension functions beyond the standard SPARQL 1.1
-built-ins. Many SHACL toolchains ship their own function libraries and register
-them at build time.
+built-ins. These are often defined as `sh:SPARQLFunction` declarations (standard
+SHACL-AF) and registered explicitly by the toolchain before running validation.
 
-**Effect:** Jena does not know about functions it has no implementation for.
-Constraints that call unknown functions will be **silently skipped or produce
-incorrect results** — there is no warning that a function was unresolved.
+**Effect:** Jena does not automatically discover `sh:SPARQLFunction` declarations
+from the loaded graph and register them as callable functions. Constraints that
+call unregistered functions will **silently produce no results** — the function
+call fails quietly, the constraint fires on no nodes, and no warning is raised.
+Loading the function definition file into the Workbench does not help.
 
 **How to recognise it:** Look for prefixed function calls inside `sh:sparql`,
 `sh:SPARQLRule`, or `sh:SPARQLTarget` blocks, e.g.:
@@ -30,10 +32,13 @@ sh:select """
 ```
 
 **Example:** The QUDT ontology defines its own function library under
-(prefix `qfn:`), implemented in the
-TopBraid SHACL engine that the QUDT Maven build uses. For more information on QUDT, see
-the [QUDT repository](https://github.com/qudt/qudt-public-repo). Jena has no
-implementation of these functions. See the table below.
+`http://qudt.org/shacl/functions#` (prefix `qfn:`), implemented as
+`sh:SPARQLFunction` declarations in `src/build/validation/qudt-shacl-functions.ttl`.
+The QUDT Maven build registers these explicitly via a `<shaclFunctions>` parameter
+before running any SHACL operations. Jena does not perform this registration
+automatically, so the functions remain unresolved even when the definitions file
+is loaded into the Workbench. For more information on QUDT, see the
+[QUDT repository](https://github.com/qudt/qudt-public-repo). See the table below.
 
 ### QUDT shapes files — compatibility summary
 
@@ -42,11 +47,11 @@ implementation of these functions. See the table below.
 | `QUDT_SRC_QA_TESTS.ttl` | 0 | ✅ Reliable |
 | `SHACL-SHACL.ttl` | 0 | ✅ Reliable |
 | `COLLECTION_QUDT_USER_TESTS.ttl` | 0 | ✅ Reliable |
-| `COLLECTION_QUDT_QA_TESTS_ALL.ttl` | 28 (`dimVec`, `conversionMultiplier`, `bound`…) | ❌ False violations expected |
+| `COLLECTION_QUDT_QA_TESTS_ALL.ttl` | 28 (`dimVec`, `conversionMultiplier`, `bound`…) | ❌ Affected constraints silently produce no results |
 | `sparql2shacl/*/infer.ttl` and `validate.ttl` | Many (`qfn:unit.dimVec.calculate`, `qfn:decimalToDouble`, …) | ❌ Not suitable |
 
 **Practical rule:** Use `COLLECTION_QUDT_USER_TESTS.ttl` with the Workbench.
-Use the QUDT Maven build (which runs TopBraid SHACL) for full QA validation.
+Use the QUDT Maven build for full QA validation.
 
 ---
 
