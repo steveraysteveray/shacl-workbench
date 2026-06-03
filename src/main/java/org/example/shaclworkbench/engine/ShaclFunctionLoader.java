@@ -3,7 +3,13 @@ package org.example.shaclworkbench.engine;
 import org.apache.jena.datatypes.xsd.XSDDatatype;
 import org.apache.jena.query.*;
 import org.apache.jena.rdf.model.*;
+import org.apache.jena.sparql.algebra.Algebra;
+import org.apache.jena.sparql.algebra.Op;
+import org.apache.jena.sparql.core.Var;
+import org.apache.jena.sparql.engine.QueryIterator;
 import org.apache.jena.sparql.engine.binding.Binding;
+import org.apache.jena.sparql.engine.binding.BindingBuilder;
+import org.apache.jena.sparql.syntax.syntaxtransform.QueryTransformOps;
 import org.apache.jena.sparql.expr.*;
 import org.apache.jena.sparql.function.Function;
 import org.apache.jena.sparql.function.FunctionEnv;
@@ -16,6 +22,7 @@ import java.math.RoundingMode;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.LinkedHashMap;
 
 /**
  * Discovers {@code sh:SPARQLFunction} declarations in loaded RDF models and
@@ -150,16 +157,16 @@ public class ShaclFunctionLoader {
     private static final class SPARQLFunctionImpl implements Function {
 
         private final String uri;
-        private final Query query;
+        private final Query query;         // kept at syntax level for syntaxSubstitute
         private final List<String> paramVarNames;
-        private final String resultVarName;
+        private final Var resultVar;
 
         SPARQLFunctionImpl(String uri, Query query,
                            List<String> paramVarNames, String resultVarName) {
-            this.uri          = uri;
-            this.query        = query;
+            this.uri           = uri;
+            this.query         = query;
             this.paramVarNames = paramVarNames;
-            this.resultVarName = resultVarName;
+            this.resultVar     = Var.alloc(resultVarName);
         }
 
         @Override
@@ -168,33 +175,54 @@ public class ShaclFunctionLoader {
         }
 
         @Override
-        public NodeValue exec(Binding binding, ExprList args, String uri, FunctionEnv env) {
-            // Bind positional arguments to parameter variable names
-            QuerySolutionMap initialBinding = new QuerySolutionMap();
-            Model helper = ModelFactory.createDefaultModel();
+        public NodeValue exec(Binding outerBinding, ExprList args, String uri, FunctionEnv env) {
+            // Build a Var→Node map from evaluated arguments
+            Map<Var, org.apache.jena.graph.Node> varMap = new LinkedHashMap<>();
             for (int i = 0; i < paramVarNames.size() && i < args.size(); i++) {
                 try {
-                    NodeValue val = args.get(i).eval(binding, env);
-                    initialBinding.add(paramVarNames.get(i), helper.asRDFNode(val.asNode()));
-                } catch (ExprEvalException ignored) {
-                    // unbound / error — leave the variable unbound in the sub-query
+                    NodeValue val = args.get(i).eval(outerBinding, env);
+                    varMap.put(Var.alloc(paramVarNames.get(i)), val.asNode());
+                } catch (ExprEvalException e) {
+                    LOG.warning("<" + this.uri + "> arg[" + i + "] "
+                            + paramVarNames.get(i) + " UNBOUND: " + e.getMessage());
                 }
             }
 
-            // Run against the same dataset the outer query is using
-            Dataset dataset = env.getDataset() != null
-                    ? DatasetFactory.wrap(env.getDataset())
-                    : DatasetFactory.empty();
+            // replaceVars does a brute-force syntax-level replacement of ALL
+            // occurrences of parameter variables, including inside subqueries.
+            // syntaxSubstitute and algebra-level approaches both fail for
+            // functions like qfn:dimVec.multiply that use parameters inside
+            // sub-SELECTs: either SPARQL scoping rules prevent substitution, or
+            // Jena renames inner variables (to ?/name) before they can be matched.
+            Query substituted = QueryTransformOps.replaceVars(query, varMap);
+            if (LOG.isLoggable(Level.WARNING) && this.uri.contains("multiply")) {
+                LOG.warning("<" + this.uri + "> varMap=" + varMap + "\nSUBSTITUTED:\n" + substituted);
+            }
+            Op op = Algebra.compile(substituted);
 
-            try (QueryExecution qe = QueryExecutionFactory.create(query, dataset, initialBinding)) {
-                ResultSet rs = qe.execSelect();
-                if (rs.hasNext()) {
-                    QuerySolution sol = rs.nextSolution();
-                    RDFNode result = sol.get(resultVarName);
-                    if (result != null) return NodeValue.makeNode(result.asNode());
+            // Wrap the default graph into a fresh DatasetGraph to avoid
+            // transaction conflicts with the outer SHACL execution context.
+            org.apache.jena.sparql.core.DatasetGraph dsg =
+                    env.getDataset() != null
+                    ? org.apache.jena.sparql.core.DatasetGraphFactory.wrap(
+                            env.getDataset().getDefaultGraph())
+                    : org.apache.jena.sparql.core.DatasetGraphFactory.create();
+
+            try {
+                QueryIterator qIter = Algebra.exec(op, dsg);
+                try {
+                    if (qIter.hasNext()) {
+                        org.apache.jena.graph.Node result = qIter.next().get(resultVar);
+                        if (result != null) return NodeValue.makeNode(result);
+                        LOG.warning("<" + this.uri + "> result variable '" + resultVar + "' unbound");
+                    } else {
+                        LOG.warning("<" + this.uri + "> returned no rows. args=" + args);
+                    }
+                } finally {
+                    qIter.close();
                 }
             } catch (Exception e) {
-                LOG.log(Level.FINE, "sh:SPARQLFunction <" + uri + "> evaluation error", e);
+                LOG.log(Level.WARNING, "<" + this.uri + "> threw: " + e.getMessage(), e);
             }
             throw new ExprEvalException("sh:SPARQLFunction <" + this.uri + "> returned no result");
         }

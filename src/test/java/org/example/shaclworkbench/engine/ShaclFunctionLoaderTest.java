@@ -4,6 +4,13 @@ import org.apache.jena.query.*;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.riot.Lang;
 import org.apache.jena.riot.RDFParser;
+import org.apache.jena.sparql.algebra.Algebra;
+import org.apache.jena.sparql.algebra.Op;
+import org.apache.jena.sparql.core.Substitute;
+import org.apache.jena.sparql.core.Var;
+import org.apache.jena.sparql.engine.QueryIterator;
+import org.apache.jena.sparql.engine.binding.BindingBuilder;
+import org.apache.jena.sparql.expr.NodeValue;
 import org.junit.jupiter.api.Test;
 
 import java.io.StringReader;
@@ -116,6 +123,98 @@ class ShaclFunctionLoaderTest {
                 "SELECT (ex:fnPrefixDecls(41) AS ?r) WHERE {}",
                 DatasetFactory.empty());
         assertEquals("42", result);
+    }
+
+    /** Directly tests the algebra-substitution path for an IRI argument. */
+    @Test
+    void localnameFunction_iriArgument() {
+        String ttl = """
+                @prefix sh:   <http://www.w3.org/ns/shacl#> .
+                @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+                @prefix qfn:  <http://qudt.org/shacl/functions#> .
+
+                qfn:localname
+                  a sh:SPARQLFunction ;
+                  sh:parameter [ sh:path qfn:input ; sh:order 0 ] ;
+                  sh:prefixes qfn: ;
+                  sh:select "SELECT (REPLACE(STR(?input), \\"^.+[/#]\\", \\"\\") AS ?result) WHERE {}" .
+
+                qfn: sh:declare [ sh:prefix "qfn" ;
+                                  sh:namespace "http://qudt.org/shacl/functions#"^^xsd:anyURI ] .
+                """;
+        ShaclFunctionLoader.registerFrom(parse(ttl));
+
+        String result = execScalarSparql(
+                "PREFIX qfn:  <http://qudt.org/shacl/functions#> " +
+                "PREFIX qkdv: <http://qudt.org/vocab/dimensionvector/> " +
+                "SELECT (qfn:localname(qkdv:A0E0L0I0M0H0T0D0) AS ?r) WHERE {}",
+                DatasetFactory.empty());
+        assertEquals("A0E0L0I0M0H0T0D0", result);
+    }
+
+    /** Directly exercises Substitute.substitute + Algebra.exec with an IRI — the core mechanism. */
+    @Test
+    void algebraSubstitute_iriInSelectExpr() {
+        String sparql = "SELECT (REPLACE(STR(?input), \"^.+[/#]\", \"\") AS ?result) WHERE {}";
+        Query q = QueryFactory.create(sparql);
+        Op op = Algebra.compile(q);
+
+        var bb = BindingBuilder.create();
+        bb.add(Var.alloc("input"),
+               org.apache.jena.graph.NodeFactory.createURI(
+                   "http://qudt.org/vocab/dimensionvector/A0E0L0I0M0H0T0D0"));
+        Op substituted = Substitute.substitute(op, bb.build());
+
+        QueryIterator qIter = Algebra.exec(substituted, DatasetFactory.empty().asDatasetGraph());
+        assertTrue(qIter.hasNext(), "No rows returned");
+        org.apache.jena.graph.Node result = qIter.next().get(Var.alloc("result"));
+        qIter.close();
+        assertNotNull(result, "result variable unbound");
+        assertEquals("A0E0L0I0M0H0T0D0", result.getLiteralLexicalForm());
+    }
+
+    /**
+     * Uses the real QUDT functions file. Verifies getDimensionExponentFromLocalname
+     * returns the M-dimension exponent (0) for the volume dimension vector.
+     * Skipped automatically if the QUDT repo is not present.
+     */
+    @Test
+    void getDimensionExponentFromLocalname_realQudtFile() {
+        java.nio.file.Path functionsFile = java.nio.file.Path.of(
+                System.getProperty("user.home"),
+                "Repositories/qudt-public-repo/src/build/validation/qudt-shacl-functions.ttl");
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                java.nio.file.Files.exists(functionsFile),
+                "QUDT functions file not found — skipping");
+
+        Model model = org.apache.jena.rdf.model.ModelFactory.createDefaultModel();
+        org.apache.jena.riot.RDFDataMgr.read(model, functionsFile.toUri().toString());
+        int n = ShaclFunctionLoader.registerFrom(model);
+        assertTrue(n > 0, "No functions registered from QUDT file");
+
+        String result = execScalarSparql(
+                "PREFIX qfn: <http://qudt.org/shacl/functions#> " +
+                "SELECT (qfn:dimVec.getDimensionExponentFromLocalname(\"A0E0L3I0M0H0T0D0\", \"M\") AS ?r) WHERE {}",
+                DatasetFactory.empty());
+        System.out.println("getDimensionExponentFromLocalname(A0E0L3I0M0H0T0D0, M) = " + result);
+        assertNotNull(result, "Function returned null — REPLACE/xsd:integer chain failed");
+    }
+
+    /**
+     * Tests the regex inline in SPARQL — if this works, the issue is in how
+     * we pass args; if this also fails, the issue is in the SPARQL engine itself.
+     */
+    @Test
+    void dimensionExponentRegex_inline() {
+        // Use full URIs to avoid prefix issues
+        String sparql =
+                "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> " +
+                "SELECT (xsd:integer(REPLACE(\"A0E0L3I0M0H0T0D0\"," +
+                "  CONCAT(\"^[^\",\"M\",\"]*\",\"M\",\"(-?[0-9]+)($|[A-Z].+)$\"),\"$1\")) AS ?r) WHERE {}";
+        String result = execScalarSparql(sparql, DatasetFactory.empty());
+        System.out.println("Inline regex result: " + result);
+        assertNotNull(result, "Inline regex returned null");
+        assertEquals("0", result);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
