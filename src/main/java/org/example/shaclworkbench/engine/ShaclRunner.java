@@ -48,12 +48,19 @@ public class ShaclRunner {
             RDFDataMgr.read(dataModel, config.dataFile().toUri().toString());
         }
 
-        // ── 2. Inference pass (SHACL-AF: sh:TripleRule and sh:SPARQLRule) ─────
+        // ── 2. Load shapes models and register any sh:SPARQLFunction found ────
+        Model inferShapesModel = config.runInference() && !config.inferenceShapeFiles().isEmpty()
+                ? loadMerged(config.inferenceShapeFiles()) : ModelFactory.createDefaultModel();
+        Model validationShapesModel = loadMerged(config.validationShapeFiles());
+
+        int fnCount = ShaclFunctionLoader.registerFrom(dataModel, inferShapesModel, validationShapesModel);
+        if (fnCount > 0) progress.accept("Registered " + fnCount + " SPARQL function(s)…");
+
+        // ── 3. Inference pass (SHACL-AF: sh:TripleRule and sh:SPARQLRule) ─────
         List<InferredTriple> inferredTriples = List.of();
         String inferredTurtle = "";
         if (config.runInference() && !config.inferenceShapeFiles().isEmpty()) {
             progress.accept("Running inference…");
-            Model inferShapesModel = loadMerged(config.inferenceShapeFiles());
             ShaclAFEngine engine = new ShaclAFEngine(
                     inferShapesModel.getGraph(), dataModel.getGraph());
             inferredTriples = engine.execute();
@@ -70,20 +77,19 @@ public class ShaclRunner {
             }
         }
 
-        // ── 3. Validation pass ────────────────────────────────────────────────
+        // ── 4. Validation pass ────────────────────────────────────────────────
         progress.accept("Validating…");
-        Model validationShapesModel = loadMerged(config.validationShapeFiles());
         Shapes validationShapes = Shapes.parse(validationShapesModel.getGraph());
         ValidationReport report = ShaclValidator.get().validate(
                 validationShapes, dataModel.getGraph());
 
-        // ── 4. Merge prefix declarations from every loaded file ───────────────
+        // ── 5. Merge prefix declarations from every loaded file ───────────────
         progress.accept("Serializing report…");
         PrefixMapping prefixes = PrefixMapping.Factory.create();
         prefixes.setNsPrefixes(dataModel);
         prefixes.setNsPrefixes(validationShapesModel);
 
-        // ── 5. Serialize the report ───────────────────────────────────────────
+        // ── 6. Serialize the report ───────────────────────────────────────────
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         RDFDataMgr.write(baos, report.getModel(), Lang.TURTLE);
 
