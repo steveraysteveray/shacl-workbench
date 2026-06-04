@@ -13,6 +13,8 @@ import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
@@ -72,6 +74,24 @@ public class ReportPanel extends JPanel {
         table.setFillsViewportHeight(true);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        table.addMouseListener(new MouseAdapter() {
+            @Override public void mousePressed(MouseEvent e)  { handlePopup(e); }
+            @Override public void mouseReleased(MouseEvent e) { handlePopup(e); }
+            private void handlePopup(MouseEvent e) {
+                if (!e.isPopupTrigger()) return;
+                int row = table.rowAtPoint(e.getPoint());
+                int col = table.columnAtPoint(e.getPoint());
+                if (row < 0) return;
+                table.setRowSelectionInterval(row, row);
+                String text = String.valueOf(table.getValueAt(row, col < 0 ? 0 : col));
+                JPopupMenu menu = new JPopupMenu();
+                JMenuItem item = new JMenuItem("Copy");
+                item.addActionListener(ae -> Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new StringSelection(text), null));
+                menu.add(item);
+                menu.show(table, e.getX(), e.getY());
+            }
+        });
         table.getColumnModel().getColumn(0).setPreferredWidth(200);
         table.getColumnModel().getColumn(1).setPreferredWidth(140);
         table.getColumnModel().getColumn(2).setPreferredWidth(140);
