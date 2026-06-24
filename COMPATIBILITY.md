@@ -36,7 +36,7 @@ sh:select """
 `sh:SPARQLFunction` declarations in `src/build/validation/qudt-shacl-functions.ttl`.
 The QUDT Maven build registers these explicitly via a `<shaclFunctions>` parameter
 before running any SHACL operations. Jena does not perform this registration
-automatically, so the functions remain unresolved even when the definitions file
+automatically, so the functions remain unresolved unless the definitions file
 is loaded into the Workbench. For more information on QUDT, see the
 [QUDT repository](https://github.com/qudt/qudt-public-repo). See the table below.
 
@@ -47,11 +47,10 @@ is loaded into the Workbench. For more information on QUDT, see the
 | `QUDT_SRC_QA_TESTS.ttl` | 0 | ✅ Reliable |
 | `SHACL-SHACL.ttl` | 0 | ✅ Reliable |
 | `COLLECTION_QUDT_USER_TESTS.ttl` | 0 | ✅ Reliable |
-| `COLLECTION_QUDT_QA_TESTS_ALL.ttl` | 28 (`dimVec`, `conversionMultiplier`, `bound`…) | ❌ Affected constraints silently produce no results |
-| `sparql2shacl/*/infer.ttl` and `validate.ttl` | Many (`qfn:unit.dimVec.calculate`, `qfn:decimalToDouble`, …) | ❌ Not suitable |
+| `COLLECTION_QUDT_QA_TESTS_ALL.ttl` | 28 (`dimVec`, `conversionMultiplier`, `bound`…) | Requires explicit placement of function definitions file into Validation shapes pane |
+| `sparql2shacl/*/infer.ttl` and `validate.ttl` | Many (`qfn:unit.dimVec.calculate`, `qfn:decimalToDouble`, …) | Requires explicit placement of function definitions file into Inference shapes pane  |
 
-**Practical rule:** Use `COLLECTION_QUDT_USER_TESTS.ttl` with the Workbench.
-Use the QUDT Maven build for full QA validation.
+**Important note:** The workbench only validates constraints found in the Validation shapes pane, so if you want your file to validate against a SHACL schema file, you must put that file into the Validation shapes pane. The app will ignore anything that is not a shape when reading any file in that pane.
 
 ---
 
