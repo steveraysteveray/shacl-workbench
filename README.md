@@ -83,7 +83,7 @@ All fields accept drag-and-drop. Use the **Browse…** and **Clear** buttons as 
 | **Inference shapes** | SHACL-AF shapes containing `sh:TripleRule` or `sh:SPARQLRule` rules. Only used when *Infer + Validate* is selected. |
 | **Validation shapes** | Standard SHACL shapes used for constraint checking. At least one file is required. |
 
-Drag files or folders onto each zone, or use the **Add file…** / **Add folder…** buttons. Dropping a folder adds its immediate `.ttl` children.
+Drag files or folders onto each zone, or use the **Add file…** / **Add folder…** buttons. Dropping a folder adds its immediate `.ttl` children. Also, be aware that the app will only validate against shapes found in files listed in the Validation shapes pane. If you want it to validate against a schema, the schema file must be added to the pane.
 
 ### 3. Choose a mode and run
 
